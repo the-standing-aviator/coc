@@ -49,11 +49,87 @@ endif()
 # add cross-platforms source files and header files 
 list(APPEND GAME_SOURCE
      Classes/AppDelegate.cpp
-     Classes/HelloWorldScene.cpp
+     Classes/Data/GameData.cpp
+     Classes/Data/PlayerData.cpp
+     Classes/Data/SaveSystem.cpp
+     Classes/GameObjects/Buildings/Building.cpp
+     Classes/GameObjects/Buildings/DefenseBuilding.cpp
+     Classes/GameObjects/Buildings/ResourceBuilding.cpp
+     Classes/GameObjects/Buildings/TroopBuilding.cpp
+     Classes/GameObjects/Spells/SpellBase.cpp
+     Classes/GameObjects/Units/Archer.cpp
+     Classes/GameObjects/Units/Barbarian.cpp
+     Classes/GameObjects/Units/Giant.cpp
+     Classes/GameObjects/Units/UnitBase.cpp
+     Classes/Managers/AnimationManager.cpp
+     Classes/Managers/ConfigManager.cpp
+     Classes/Managers/GameManager.cpp
+     Classes/Managers/NetworkManager.cpp
+     Classes/Managers/ResourceManager.cpp
+     Classes/Managers/SoundManager.cpp
+     Classes/Managers/UnitManager.cpp
+     Classes/Patterns/AttackVisitor.cpp
+     Classes/Patterns/ObserverPattern.cpp
+     Classes/Patterns/StatePattern.cpp
+     Classes/Scenes/BattleScene.cpp
+     Classes/Scenes/LoadingScene.cpp
+     Classes/Scenes/MainScene.cpp
+     Classes/Scenes/MenuScene.cpp
+     classes/Systems/AISystem.cpp
+     classes/Systems/CombatSystem.cpp
+     classes/Systems/EconomySystem.cpp
+     classes/Systems/Pathfinding.cpp
+     classes/UI/BuildingButton.cpp
+     classes/UI/CustomButton.cpp
+     classes/UI/ResourcePanel.cpp
+     classes/UI/UnitButton.cpp
+     classes/Utils/DebugUtils.cpp
+     classes/Utils/MathUtils.cpp
+     classes/Utils/StringUtils.cpp
+     #Classes/HelloWorldScene.cpp
      )
 list(APPEND GAME_HEADER
      Classes/AppDelegate.h
-     Classes/HelloWorldScene.h
+     Classes/Data/GameData.h
+     Classes/Data/PlayerData.h
+     Classes/Data/SaveSystem.h
+     Classes/GameObjects/Buildings/Building.h
+     Classes/GameObjects/Buildings/DefenseBuilding.h
+     Classes/GameObjects/Buildings/ResourceBuilding.h
+     Classes/GameObjects/Buildings/TroopBuilding.h
+     Classes/GameObjects/Spells/SpellBase.h
+     Classes/GameObjects/Units/Archer.h
+     Classes/GameObjects/Units/Barbarian.h
+     Classes/GameObjects/Units/Giant.h
+     Classes/GameObjects/Units/UnitBase.h
+     Classes/Managers/AnimationManager.h
+     Classes/Managers/ConfigManager.h
+     Classes/Managers/GameManager.h
+     Classes/Managers/NetworkManager.h
+     Classes/Managers/ResourceManager.h
+     Classes/Managers/SoundManager.h
+     Classes/Managers/UnitManager.h
+     Classes/Patterns/AttackVisitor.h
+     Classes/Patterns/ObserverPattern.h
+     Classes/Patterns/StatePattern.h
+     Classes/Scenes/BattleScene.h
+     Classes/Scenes/LoadingScene.h
+     Classes/Scenes/MainScene.h
+     Classes/Scenes/MenuScene.h
+     classes/Systems/AISystem.h
+     classes/Systems/CombatSystem.h
+     classes/Systems/EconomySystem.h
+     classes/Systems/Pathfinding.h
+     classes/UI/BuildingButton.h
+     classes/UI/CustomButton.h
+     classes/UI/ResourcePanel.h
+     classes/UI/UnitButton.h
+     classes/Utils/DebugUtils.h
+     classes/Utils/MathUtils.h
+     classes/Utils/StringUtils.h
+     classes/Utils/GameConstants.h
+     classes/Utils/ObjectPool.h
+    # Classes/HelloWorldScene.h
      )
 
 if(ANDROID)
@@ -124,6 +200,16 @@ endif()
 target_link_libraries(${APP_NAME} cocos2d)
 target_include_directories(${APP_NAME}
         PRIVATE Classes
+        PRIVATE Classes/UI
+        PRIVATE Classes/Patterns
+        PRIVATE Classes/Managers
+        PRIVATE Classes/Scenes
+        PRIVATE Classes/GameObjects/Spells
+        PRIVATE Classes/GameObjects/Units
+        PRIVATE Classes/GameObjects/Buildings
+        PRIVATE Classes/Utils
+        PRIVATE Classes/Data
+        PRIVATE Classes/Systems
         PRIVATE ${COCOS2DX_ROOT_PATH}/cocos/audio/include/
 )
 
