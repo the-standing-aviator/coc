@@ -1,10 +1,12 @@
 #include "Scenes/MainScene.h"
 #include "Managers/SoundManager.h"
+#include "UI/ResourcePanel.h"
 #include "UI/BuildingButton.h"
 #include "GameObjects/Buildings/Building.h"
 #include "GameObjects/Buildings/DefenseBuilding.h"
 #include "GameObjects/Buildings/ResourceBuilding.h"
 #include "GameObjects/Buildings/TroopBuilding.h"
+#include "GameObjects/Buildings/TownHall.h"
 #include <memory>
 #include <cmath>
 using namespace cocos2d;
@@ -47,8 +49,8 @@ bool MainScene::init()
     _world->addChild(_occupied, 2);
     _world->addChild(_hint, 2);
     _occupy.assign(_rows, std::vector<int>(_cols, 0));
-    _buildingScaleById.assign(9, 1.0f);
-    _buildingOffsetById.assign(9, Vec2::ZERO);
+    _buildingScaleById.assign(10, 1.0f);
+    _buildingOffsetById.assign(10, Vec2::ZERO);
 
     setupInteraction();
 
@@ -135,6 +137,9 @@ bool MainScene::init()
         panel->getEventDispatcher()->addEventListenerWithSceneGraphPriority(listener, panel);
         };
     this->addChild(btn, 40);
+    auto resPanel = ResourcePanel::create();
+    resPanel->setName("ResourcePanel");
+    this->addChild(resPanel, 45);
 
     auto listener = EventListenerKeyboard::create();
     listener->onKeyPressed = [this](EventKeyboard::KeyCode code, Event*) {
@@ -145,7 +150,7 @@ bool MainScene::init()
         };
     _eventDispatcher->addEventListenerWithSceneGraphPriority(listener, this);
 
-    //����ͼƬ����
+    //建筑大小接口
     setBuildingScale(0.5f);
 
     setBuildingScaleForId(1, 0.4f);
@@ -162,6 +167,12 @@ bool MainScene::init()
 
     setBuildingScaleForId(8, 1.3f);
     setBuildingOffsetForId(8, Vec2(2, 5));
+
+    setBuildingScaleForId(9, 0.8f);
+    setBuildingOffsetForId(9, Vec2(2, 5));
+    int cr = _rows / 2;
+    int cc = _cols / 2;
+    if (canPlace(cr, cc)) placeBuilding(cr, cc, 9);
 
     return true;
 }
@@ -242,6 +253,16 @@ void MainScene::setZoom(float z)
     if (_world) _world->setScale(_zoom);
     clampWorld();
 }
+void MainScene::setResourceUiScale(float s)
+{
+    auto n = this->getChildByName("ResourcePanel");
+    if (n) {
+        auto panel = dynamic_cast<ResourcePanel*>(n);
+        if (panel) panel->setPanelScale(s);
+    }
+}
+
+ 
 
 void MainScene::setupInteraction()
 {
@@ -412,11 +433,12 @@ void MainScene::placeBuilding(int r, int c, int id)
         case 6: b.reset(new GoldStorage()); break;
         case 7: b.reset(new Barracks()); break;
         case 8: b.reset(new TrainingCamp()); break;
+        case 9: b.reset(new TownHall()); break;
         default: b.reset(new Building()); break;
     }
     auto s = b->createSprite();
     Vec2 center(_anchor.x + (c - r) * (_tileW * 0.5f), _anchor.y - (c + r) * (_tileH * 0.5f));
-    int idx = std::max(1, std::min(8, id));
+    int idx = std::max(1, std::min(9, id));
     Vec2 off = _buildingOffsetById[idx];
     s->setPosition(center + off);
     s->setScale(_buildingScale * _buildingScaleById[idx]);
@@ -431,13 +453,15 @@ void MainScene::setBuildingScale(float s)
 
 void MainScene::setBuildingScaleForId(int id, float s)
 {
-    if (id < 1 || id > 8) return;
+    if (id == 0) id = 9;
+    if (id < 1 || id > 9) return;
     _buildingScaleById[id] = std::max(0.1f, std::min(3.0f, s));
 }
 
 void MainScene::setBuildingOffsetForId(int id, const Vec2& off)
 {
-    if (id < 1 || id > 8) return;
+    if (id == 0) id = 9;
+    if (id < 1 || id > 9) return;
     _buildingOffsetById[id] = off;
 }
 
@@ -483,7 +507,7 @@ void MainScene::commitMove(int r, int c)
         for (int dc = -1; dc <= 1; ++dc)
             _occupy[r + dr][c + dc] = b.id;
     Vec2 center(_anchor.x + (c - r) * (_tileW * 0.5f), _anchor.y - (c + r) * (_tileH * 0.5f));
-    int idx = std::max(1, std::min(8, b.id));
+    int idx = std::max(1, std::min(9, b.id));
     Vec2 off = _buildingOffsetById[idx];
     if (b.sprite) b.sprite->setPosition(center + off);
     b.r = r; b.c = c;

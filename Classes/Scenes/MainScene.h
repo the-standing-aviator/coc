@@ -58,4 +58,8 @@ private:
     void setBuildingOffsetForId(int id, const cocos2d::Vec2& off);
     std::vector<float> _buildingScaleById;
     std::vector<cocos2d::Vec2> _buildingOffsetById;
+
+public:
+    void setResourceUiScale(float s);
+ 
 };
