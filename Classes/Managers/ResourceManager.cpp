@@ -12,13 +12,25 @@ int ResourceManager::getElixirCap() { return _res.elixirCap; }
 int ResourceManager::getGoldCap() { return _res.goldCap; }
 int ResourceManager::getPopulationCap() { return _res.populationCap; }
 
-void ResourceManager::setElixir(int v) { _res.elixir = std::max(0, std::min(_res.elixirCap, v)); notify(); }
-void ResourceManager::setGold(int v) { _res.gold = std::max(0, std::min(_res.goldCap, v)); notify(); }
-void ResourceManager::setPopulation(int v) { _res.population = std::max(0, std::min(_res.populationCap, v)); notify(); }
+void ResourceManager::setElixirCap(int v) {
+    _res.elixirCap = std::max(0, v);
+    if (_res.elixirCap > 0) _res.elixir = std::min(_res.elixir, _res.elixirCap);
+    notify();
+}
+void ResourceManager::setGoldCap(int v) {
+    _res.goldCap = std::max(0, v);
+    if (_res.goldCap > 0) _res.gold = std::min(_res.gold, _res.goldCap);
+    notify();
+}
+void ResourceManager::setPopulationCap(int v) {
+    _res.populationCap = std::max(0, v);
+    if (_res.populationCap > 0) _res.population = std::min(_res.population, _res.populationCap);
+    notify();
+}
 
-void ResourceManager::setElixirCap(int v) { _res.elixirCap = std::max(0, v); _res.elixir = std::min(_res.elixir, _res.elixirCap); notify(); }
-void ResourceManager::setGoldCap(int v) { _res.goldCap = std::max(0, v); _res.gold = std::min(_res.gold, _res.goldCap); notify(); }
-void ResourceManager::setPopulationCap(int v) { _res.populationCap = std::max(0, v); _res.population = std::min(_res.population, _res.populationCap); notify(); }
+void ResourceManager::setElixir(int v) { _res.elixir = std::max(0, v); notify(); }
+void ResourceManager::setGold(int v) { _res.gold = std::max(0, v); notify(); }
+void ResourceManager::setPopulation(int v) { _res.population = std::max(0, v); notify(); }
 
 void ResourceManager::addElixir(int v) { setElixir(_res.elixir + v); }
 void ResourceManager::addGold(int v) { setGold(_res.gold + v); }

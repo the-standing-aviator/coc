@@ -29,12 +29,12 @@ bool ResourcePanel::init() {
     goldText->setColor(Color3B::BLACK);
     _fillGoldItem = MenuItemLabel::create(goldText, [](cocos2d::Ref*) {
         ResourceManager::setGold(ResourceManager::getGoldCap());
-    });
+        });
     auto elixirText = Label::createWithSystemFont("Fill", "Arial", 18);
     elixirText->setColor(Color3B::BLACK);
     _fillElixirItem = MenuItemLabel::create(elixirText, [](cocos2d::Ref*) {
         ResourceManager::setElixir(ResourceManager::getElixirCap());
-    });
+        });
     auto timeText = Label::createWithSystemFont("x100", "Arial", 18);
     timeText->setColor(Color3B::BLACK);
     _timeItem = MenuItemLabel::create(timeText, [this, timeText](cocos2d::Ref*) {
@@ -42,11 +42,12 @@ bool ResourcePanel::init() {
         if (_timeActive) {
             timeText->setString("Cancel");
             if (onSetTimeScale) onSetTimeScale(100.f);
-        } else {
+        }
+        else {
             timeText->setString("x100");
             if (onSetTimeScale) onSetTimeScale(1.f);
         }
-    });
+        });
     _menu->addChild(_fillGoldItem);
     _menu->addChild(_fillElixirItem);
     _menu->addChild(_timeItem);
@@ -55,7 +56,7 @@ bool ResourcePanel::init() {
     ResourceManager::onChanged([this](const Resources& r) {
         updateTexts(r);
         layout();
-    });
+        });
     return true;
 }
 void ResourcePanel::setPanelScale(float s) {
@@ -73,7 +74,7 @@ void ResourcePanel::layout() {
     auto sizeOf = [this](Label* lb) {
         Size sz = lb->getContentSize();
         return Size(sz.width * _scale, sz.height * _scale);
-    };
+        };
     _goldLabel->setScale(_scale);
     _elixirLabel->setScale(_scale);
     _popLabel->setScale(_scale);

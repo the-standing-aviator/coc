@@ -1,17 +1,40 @@
 #include "Managers/SoundManager.h"
+
+#include <algorithm>
+
+using namespace cocos2d;
 using namespace cocos2d::experimental;
 
-int SoundManager::_audioId = -1;
-float SoundManager::_volume = 1.0f;
+int   SoundManager::_audioId = -1;
+float SoundManager::_masterVolume = 1.0f;
+float SoundManager::_bgmBaseVolume = 1.0f;
+bool  SoundManager::_inited = false;
+
+static float clamp01(float v)
+{
+    return std::max(0.0f, std::min(1.0f, v));
+}
+
+void SoundManager::initFromUserDefault()
+{
+    if (_inited) return;
+    _inited = true;
+    // Persisted master volume (so setting it in LoginScene affects MainScene later).
+    _masterVolume = clamp01(UserDefault::getInstance()->getFloatForKey("master_volume", 1.0f));
+}
 
 void SoundManager::play(const std::string& path, bool loop, float volume)
 {
+    initFromUserDefault();
+    _bgmBaseVolume = clamp01(volume);
+
     if (_audioId != -1) {
         AudioEngine::stop(_audioId);
         _audioId = -1;
     }
-    _audioId = AudioEngine::play2d(path, loop, volume);
-    _volume = volume;
+
+    const float outVol = clamp01(_bgmBaseVolume * _masterVolume);
+    _audioId = AudioEngine::play2d(path, loop, outVol);
 }
 
 void SoundManager::stop()
@@ -32,8 +55,35 @@ void SoundManager::resume()
     if (_audioId != -1) AudioEngine::resume(_audioId);
 }
 
+void SoundManager::setBgmBaseVolume(float v)
+{
+    initFromUserDefault();
+    _bgmBaseVolume = clamp01(v);
+    if (_audioId != -1) {
+        AudioEngine::setVolume(_audioId, clamp01(_bgmBaseVolume * _masterVolume));
+    }
+}
+
+float SoundManager::getBgmBaseVolume()
+{
+    initFromUserDefault();
+    return _bgmBaseVolume;
+}
+
 void SoundManager::setVolume(float v)
 {
-    _volume = std::max(0.0f, std::min(1.0f, v));
-    if (_audioId != -1) AudioEngine::setVolume(_audioId, _volume);
+    initFromUserDefault();
+    _masterVolume = clamp01(v);
+    UserDefault::getInstance()->setFloatForKey("master_volume", _masterVolume);
+    UserDefault::getInstance()->flush();
+
+    if (_audioId != -1) {
+        AudioEngine::setVolume(_audioId, clamp01(_bgmBaseVolume * _masterVolume));
+    }
+}
+
+float SoundManager::getVolume()
+{
+    initFromUserDefault();
+    return _masterVolume;
 }
