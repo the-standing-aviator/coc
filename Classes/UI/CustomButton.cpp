@@ -22,7 +22,7 @@ LayerColor* CustomButton::createUpgradePanel(const std::string& title, const std
         auto btnCancel = MenuItemLabel::create(btnCancelLabel, [onCancel, panel](Ref*) {
             if (onCancel) onCancel();
             panel->removeFromParent();
-        });
+            });
         float w = panel->getContentSize().width;
         float y = 40.f;
         btnCancel->setPosition(Vec2(w * 0.5f, y));
@@ -31,7 +31,8 @@ LayerColor* CustomButton::createUpgradePanel(const std::string& title, const std
         listener->setSwallowTouches(true);
         listener->onTouchBegan = [](Touch*, Event*) { return true; };
         panel->getEventDispatcher()->addEventListenerWithSceneGraphPriority(listener, panel);
-    } else {
+    }
+    else {
         auto line1 = Label::createWithSystemFont(StringUtils::format("Required: %s", resName.c_str()), "Arial", 20);
         line1->setColor(Color3B::BLACK);
         line1->setPosition(Vec2(panel->getContentSize().width * 0.5f, panel->getContentSize().height - 70.f));
@@ -45,18 +46,18 @@ LayerColor* CustomButton::createUpgradePanel(const std::string& title, const std
         panel->addChild(menu, 2);
         auto btnUpgradeLabel = Label::createWithSystemFont("Upgrade", "Arial", 20);
         auto btnCancelLabel = Label::createWithSystemFont("Cancel", "Arial", 20);
-        btnUpgradeLabel->setColor(disabled ? Color3B(150,150,150) : Color3B::BLACK);
+        btnUpgradeLabel->setColor(disabled ? Color3B(150, 150, 150) : Color3B::BLACK);
         btnCancelLabel->setColor(Color3B::BLACK);
         auto btnUpgrade = MenuItemLabel::create(btnUpgradeLabel, [onUpgrade, disabled, panel](Ref*) {
             if (disabled) return;
             if (onUpgrade) onUpgrade();
             panel->removeFromParent();
-        });
+            });
         btnUpgrade->setEnabled(!disabled);
         auto btnCancel = MenuItemLabel::create(btnCancelLabel, [onCancel, panel](Ref*) {
             if (onCancel) onCancel();
             panel->removeFromParent();
-        });
+            });
         float w = panel->getContentSize().width;
         float y = 40.f;
         btnUpgrade->setPosition(Vec2(w * 0.35f, y));

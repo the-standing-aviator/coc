@@ -75,4 +75,13 @@ private:
 
     cocos2d::MenuItemImage* _battleButton = nullptr;
 
+private:
+    // ESC menu (in-game pause/settings menu)
+    void openEscMenu();
+    void closeEscMenu();
+    void openSettings();
+
+    cocos2d::LayerColor* _escMask = nullptr;
+    cocos2d::LayerColor* _settingsMask = nullptr;
+
 };

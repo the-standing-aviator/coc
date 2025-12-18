@@ -45,7 +45,8 @@ public:
                 auto P = sprite->getPosition();
                 promptLabel->setPosition(P + cocos2d::Vec2(0, 40));
             }
-        } else {
+        }
+        else {
             if (promptLabel) {
                 promptLabel->removeFromParent();
                 promptLabel = nullptr;
@@ -114,7 +115,8 @@ public:
                 auto P = sprite->getPosition();
                 promptLabel->setPosition(P + cocos2d::Vec2(0, 40));
             }
-        } else {
+        }
+        else {
             if (promptLabel) {
                 promptLabel->removeFromParent();
                 promptLabel = nullptr;
