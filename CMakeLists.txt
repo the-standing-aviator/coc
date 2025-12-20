@@ -47,13 +47,91 @@ if(APPLE OR WINDOWS)
 endif()
 
 # add cross-platforms source files and header files 
-file(GLOB_RECURSE GAME_SOURCE
-     "Classes/*.cpp"
+list(APPEND GAME_SOURCE
+     Classes/AppDelegate.cpp
+     Classes/Data/GameData.cpp
+     Classes/Data/PlayerData.cpp
+     Classes/Data/SaveSystem.cpp
+     Classes/GameObjects/Buildings/Building.cpp
+     Classes/GameObjects/Buildings/DefenseBuilding.cpp
+     Classes/GameObjects/Buildings/ResourceBuilding.cpp
+     Classes/GameObjects/Buildings/TroopBuilding.cpp
+     Classes/GameObjects/Spells/SpellBase.cpp
+     Classes/GameObjects/Units/Archer.cpp
+     Classes/GameObjects/Units/Barbarian.cpp
+     Classes/GameObjects/Units/Giant.cpp
+     Classes/GameObjects/Units/UnitBase.cpp
+     Classes/Managers/AnimationManager.cpp
+     Classes/Managers/ConfigManager.cpp
+     Classes/Managers/GameManager.cpp
+     Classes/Managers/NetworkManager.cpp
+     Classes/Managers/ResourceManager.cpp
+     Classes/Managers/SoundManager.cpp
+     Classes/Managers/UnitManager.cpp
+     Classes/Patterns/AttackVisitor.cpp
+     Classes/Patterns/ObserverPattern.cpp
+     Classes/Patterns/StatePattern.cpp
+     Classes/Scenes/BattleScene.cpp
+     Classes/Scenes/LoginScene.cpp
+     Classes/Scenes/MainScene.cpp
+     Classes/Scenes/MenuScene.cpp
+     Classes/Systems/AISystem.cpp
+     Classes/Systems/CombatSystem.cpp
+     Classes/Systems/EconomySystem.cpp
+     Classes/Systems/Pathfinding.cpp
+     Classes/UI/BuildingButton.cpp
+     Classes/UI/CustomButton.cpp
+     Classes/UI/ResourcePanel.cpp
+     Classes/UI/UnitButton.cpp
+     Classes/Utils/DebugUtils.cpp
+     Classes/Utils/MathUtils.cpp
+     Classes/Utils/StringUtils.cpp
+     #Classes/HelloWorldScene.cpp
      )
-file(GLOB_RECURSE GAME_HEADER
-     "Classes/*.h"
-     "Classes/*.hpp"
+list(APPEND GAME_HEADER
+     Classes/AppDelegate.h
+     Classes/Data/GameData.h
+     Classes/Data/PlayerData.h
+     Classes/Data/SaveSystem.h
+     Classes/GameObjects/Buildings/Building.h
+     Classes/GameObjects/Buildings/DefenseBuilding.h
+     Classes/GameObjects/Buildings/ResourceBuilding.h
+     Classes/GameObjects/Buildings/TroopBuilding.h
+     Classes/GameObjects/Spells/SpellBase.h
+     Classes/GameObjects/Units/Archer.h
+     Classes/GameObjects/Units/Barbarian.h
+     Classes/GameObjects/Units/Giant.h
+     Classes/GameObjects/Units/UnitBase.h
+     Classes/Managers/AnimationManager.h
+     Classes/Managers/ConfigManager.h
+     Classes/Managers/GameManager.h
+     Classes/Managers/NetworkManager.h
+     Classes/Managers/ResourceManager.h
+     Classes/Managers/SoundManager.h
+     Classes/Managers/UnitManager.h
+     Classes/Patterns/AttackVisitor.h
+     Classes/Patterns/ObserverPattern.h
+     Classes/Patterns/StatePattern.h
+     Classes/Scenes/BattleScene.h
+     Classes/Scenes/LoginScene.h
+     Classes/Scenes/MainScene.h
+     Classes/Scenes/MenuScene.h
+     Classes/Systems/AISystem.h
+     Classes/Systems/CombatSystem.h
+     Classes/Systems/EconomySystem.h
+     Classes/Systems/Pathfinding.h
+     Classes/UI/BuildingButton.h
+     Classes/UI/CustomButton.h
+     Classes/UI/ResourcePanel.h
+     Classes/UI/UnitButton.h
+     Classes/Utils/DebugUtils.h
+     Classes/Utils/MathUtils.h
+     Classes/Utils/StringUtils.h
+     Classes/Utils/GameConstants.h
+     Classes/Utils/ObjectPool.h
+    # Classes/HelloWorldScene.h
      )
+
 if(ANDROID)
     # change APP_NAME to the share library name for Android, it's value depend on AndroidManifest.xml
     set(APP_NAME MyGame)
@@ -122,6 +200,16 @@ endif()
 target_link_libraries(${APP_NAME} cocos2d)
 target_include_directories(${APP_NAME}
         PRIVATE Classes
+        PRIVATE Classes/UI
+        PRIVATE Classes/Patterns
+        PRIVATE Classes/Managers
+        PRIVATE Classes/Scenes
+        PRIVATE Classes/GameObjects/Spells
+        PRIVATE Classes/GameObjects/Units
+        PRIVATE Classes/GameObjects/Buildings
+        PRIVATE Classes/Utils
+        PRIVATE Classes/Data
+        PRIVATE Classes/Systems
         PRIVATE ${COCOS2DX_ROOT_PATH}/cocos/audio/include/
 )
 
