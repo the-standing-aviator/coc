@@ -1,5 +1,6 @@
 #pragma once
 #include "cocos2d.h"
+#include "ui/CocosGUI.h"
 #include <vector>
 #include <memory>
 #include <unordered_map>
@@ -96,4 +97,8 @@ private:
     void openAttackTargetPicker();
     void closeAttackTargetPicker();
     cocos2d::LayerColor* _attackMask = nullptr;
+    cocos2d::Node* _attackPanel = nullptr;
+    cocos2d::ui::ScrollView* _attackScroll = nullptr;
+    cocos2d::Node* _attackContent = nullptr;
+    cocos2d::EventListenerMouse* _attackMouseListener = nullptr;
 };

@@ -1,12 +1,10 @@
 #pragma once
-
 #include "cocos2d.h"
+#include "ui/CocosGUI.h"
 
-// Main menu:
-//  - Create New Save (auto pick first empty slot then enter MainScene)
-//  - Load Existing Save (go to LoginScene)
-//
-// NOTE: Keep this scene lightweight and readable. All heavy data logic is handled by SaveSystem.
+// Main entry menu
+// - Create New Save: auto create first empty slot, then enter MainScene
+// - Load Existing Save: open a save selector overlay (Enter/Delete), and can close back to menu
 class MenuScene : public cocos2d::Scene
 {
 public:
@@ -15,13 +13,18 @@ public:
     CREATE_FUNC(MenuScene);
 
 private:
-    void openSettings();
-    void closeSettings();
+    void createNewSaveAndEnter();
 
-    // Tiny toast text (for errors like "No empty slot")
-    void showToast(const std::string& text);
+    // Save selector overlay
+    void openSaveSelector();
+    void closeSaveSelector();
+    void buildSaveUI();
+    void refreshSaveList();
 
 private:
-    cocos2d::LayerColor* _settingsMask = nullptr;
-    cocos2d::Label* _toast = nullptr;
+    cocos2d::LayerColor* _saveMask = nullptr;
+    cocos2d::ui::ScrollView* _saveScroll = nullptr;
+    cocos2d::Node* _saveContent = nullptr;
+    cocos2d::Node* _savePanel = nullptr;
+    cocos2d::EventListenerMouse* _saveMouseListener = nullptr;
 };

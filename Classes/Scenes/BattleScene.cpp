@@ -1,6 +1,6 @@
 #include "Scenes/BattleScene.h"
 #include "Scenes/MainScene.h"
-#include "Scenes/MenuScene.h"
+#include "Scenes/LoginScene.h"
 #include "Data/SaveSystem.h"
 #include "GameObjects/Buildings/Building.h"
 #include "Managers/SoundManager.h"
@@ -11,6 +11,7 @@
 #include <windows.h>
 #endif
 #include <algorithm>
+#include <cmath>
 
 USING_NS_CC;
 
@@ -80,7 +81,8 @@ void BattleScene::renderTargetVillage()
         Vec2 local((uv.x - 0.5f) * s.width, (uv.y - 0.5f) * s.height);
         Vec2 parentSpace = _background->getPosition() + Vec2(local.x * sx, local.y * sy);
         return _background->getParent()->convertToWorldSpace(parentSpace);
-        };
+    };
+
     Vec2 uvTop(0.51f, 0.20f);
     Vec2 uvRight(0.83f, 0.49f);
     Vec2 uvBottom(0.51f, 0.92f);
@@ -100,7 +102,7 @@ void BattleScene::renderTargetVillage()
         int sb = b.r + b.c;
         if (sa == sb) return a.r < b.r;
         return sa < sb;
-        });
+    });
 
     for (const auto& bInfo : data.buildings)
     {
@@ -146,18 +148,12 @@ bool BattleScene::init()
     setBuildingVisualParams();
     renderTargetVillage();
 
-    // Back button
-    auto backLabel = Label::createWithSystemFont("Back to Village", "Arial", 20);
-    auto backItem = MenuItemLabel::create(backLabel, [](Ref* sender) {
-        Director::getInstance()->replaceScene(TransitionFade::create(0.5f, MainScene::createScene()));
-        });
-    backItem->setPosition(Vec2(origin.x + 100, origin.y + visibleSize.height - 50));
+    // Battle HUD & countdown
+    setupBattleHUD();
+    startPhase(Phase::Scout, 45.0f);
+    scheduleUpdate();
 
-    auto menu = Menu::create(backItem, nullptr);
-    menu->setPosition(Vec2::ZERO);
-    this->addChild(menu, 1);
-
-    // ESC menu
+    // ESC menu toggle
     auto listener = EventListenerKeyboard::create();
     listener->onKeyPressed = [this](EventKeyboard::KeyCode code, Event*) {
         if (code == EventKeyboard::KeyCode::KEY_ESCAPE) {
@@ -169,10 +165,120 @@ bool BattleScene::init()
             if (_escMask) closeEscMenu();
             else openEscMenu();
         }
-        };
+    };
     _eventDispatcher->addEventListenerWithSceneGraphPriority(listener, this);
 
     return true;
+}
+
+void BattleScene::setupBattleHUD()
+{
+    if (_hud) return;
+
+    auto visibleSize = Director::getInstance()->getVisibleSize();
+    auto origin = Director::getInstance()->getVisibleOrigin();
+
+    _hud = Node::create();
+    this->addChild(_hud, 50);
+
+    _phaseLabel = Label::createWithSystemFont("Scout Phase", "Arial", 26);
+    _phaseLabel->setPosition(origin + Vec2(visibleSize.width * 0.5f, visibleSize.height - 26));
+    _hud->addChild(_phaseLabel);
+
+    _timeLabel = Label::createWithSystemFont("45", "Arial", 26);
+    _timeLabel->setPosition(origin + Vec2(visibleSize.width * 0.5f, visibleSize.height - 52));
+    _hud->addChild(_timeLabel);
+
+    float barW = 520.0f;
+    float barH = 14.0f;
+    Vec2 barPos = origin + Vec2(visibleSize.width * 0.5f - barW * 0.5f, visibleSize.height - 80);
+
+    _barBg = LayerColor::create(Color4B(40, 40, 40, 200), barW, barH);
+    _barBg->setAnchorPoint(Vec2(0.0f, 0.5f));
+    _barBg->setPosition(barPos + Vec2(0, barH * 0.5f));
+    _hud->addChild(_barBg);
+
+    _barFill = LayerColor::create(Color4B(70, 200, 70, 220), barW, barH);
+    _barFill->setAnchorPoint(Vec2(0.0f, 0.5f));
+    _barFill->setPosition(barPos + Vec2(0, barH * 0.5f));
+    _barFill->setScaleX(1.0f);
+    _hud->addChild(_barFill);
+
+    auto returnLabel = Label::createWithSystemFont("Return", "Arial", 44);
+    auto returnItem = MenuItemLabel::create(returnLabel, [this](Ref*) {
+        SaveSystem::setBattleTargetSlot(-1);
+        Director::getInstance()->replaceScene(TransitionFade::create(0.35f, MainScene::createScene()));
+    });
+    returnItem->setPosition(origin + visibleSize / 2);
+    _returnMenu = Menu::create(returnItem, nullptr);
+    _returnMenu->setPosition(Vec2::ZERO);
+    _returnMenu->setVisible(false);
+    this->addChild(_returnMenu, 100);
+}
+
+void BattleScene::startPhase(Phase p, float durationSec)
+{
+    _phase = p;
+    _phaseTotal = std::max(0.001f, durationSec);
+    _phaseRemaining = durationSec;
+    updateBattleHUD();
+}
+
+void BattleScene::updateBattleHUD()
+{
+    if (!_phaseLabel || !_timeLabel || !_barFill) return;
+
+    switch (_phase)
+    {
+    case Phase::Scout:
+        _phaseLabel->setString("Scout Phase (observe) - 45s");
+        break;
+    case Phase::Battle:
+        _phaseLabel->setString("Battle Phase - 180s");
+        break;
+    case Phase::End:
+        _phaseLabel->setString("Battle End");
+        break;
+    }
+
+    int sec = (int)std::ceil(std::max(0.0f, _phaseRemaining));
+    _timeLabel->setString(StringUtils::format("%d", sec));
+
+    float percent = _phaseRemaining / _phaseTotal;
+    percent = std::max(0.0f, std::min(1.0f, percent));
+    _barFill->setScaleX(percent);
+}
+
+void BattleScene::showReturnButton()
+{
+    if (_returnMenu) _returnMenu->setVisible(true);
+}
+
+void BattleScene::update(float dt)
+{
+    if (_phase == Phase::End)
+        return;
+
+    _phaseRemaining -= dt;
+    if (_phaseRemaining <= 0.0f)
+    {
+        if (_phase == Phase::Scout)
+        {
+            startPhase(Phase::Battle, 180.0f);
+            return;
+        }
+        if (_phase == Phase::Battle)
+        {
+            _phase = Phase::End;
+            _phaseRemaining = 0.0f;
+            updateBattleHUD();
+            this->unscheduleUpdate();
+            showReturnButton();
+            return;
+        }
+    }
+
+    updateBattleHUD();
 }
 
 void BattleScene::openEscMenu()
@@ -212,15 +318,15 @@ void BattleScene::openEscMenu()
     auto settingsLabel = Label::createWithSystemFont("Settings", "Arial", 48);
     auto settingsItem = MenuItemLabel::create(settingsLabel, [this](Ref*) {
         this->openSettings();
-        });
+    });
 
     auto backLabel = Label::createWithSystemFont("Back to Start", "Arial", 42);
     auto backItem = MenuItemLabel::create(backLabel, [this](Ref*) {
         closeEscMenu();
         Director::getInstance()->replaceScene(
-            TransitionFade::create(0.35f, MenuScene::createScene())
+            TransitionFade::create(0.35f, LoginScene::createScene())
         );
-        });
+    });
 
     auto exitLabel = Label::createWithSystemFont("Exit Game", "Arial", 42);
     auto exitItem = MenuItemLabel::create(exitLabel, [](Ref*) {
@@ -229,7 +335,7 @@ void BattleScene::openEscMenu()
 #else
         Director::getInstance()->end();
 #endif
-        });
+    });
 
     settingsItem->setPosition(Vec2(panelW / 2, panelH / 2 + 70));
     backItem->setPosition(Vec2(panelW / 2, panelH / 2));
@@ -242,11 +348,11 @@ void BattleScene::openEscMenu()
     auto closeLabel = Label::createWithSystemFont("X", "Arial", 42);
     auto closeItem = MenuItemLabel::create(closeLabel, [this](Ref*) {
         closeEscMenu();
-        });
+    });
     closeItem->setPosition(Vec2(panelW - 40, panelH - 40));
     auto closeMenu = Menu::create(closeItem, nullptr);
     closeMenu->setPosition(Vec2::ZERO);
-    panel->addChild(closeMenu, 2);
+    panel->addChild(closeMenu);
 }
 
 void BattleScene::closeEscMenu()
@@ -306,10 +412,7 @@ void BattleScene::openSettings()
     volSlider->setPercent((int)(curVol * 100.0f + 0.5f));
     panel->addChild(volSlider);
 
-    auto mute = ui::CheckBox::create(
-        "ui/checkbox_off.png",
-        "ui/checkbox_on.png"
-    );
+    auto mute = ui::CheckBox::create("ui/checkbox_off.png", "ui/checkbox_on.png");
     mute->setPosition(Vec2(110, 160));
     mute->setSelected(curVol <= 0.001f);
     panel->addChild(mute);
@@ -327,7 +430,7 @@ void BattleScene::openSettings()
             SoundManager::setVolume(v);
             mute->setSelected(v <= 0.001f);
         }
-        });
+    });
 
     mute->addEventListener([=](Ref*, ui::CheckBox::EventType type) {
         bool isMute = (type == ui::CheckBox::EventType::SELECTED);
@@ -341,7 +444,7 @@ void BattleScene::openSettings()
             float v = volSlider->getPercent() / 100.0f;
             SoundManager::setVolume(v);
         }
-        });
+    });
 
     auto closeLabel = Label::createWithSystemFont("X", "Arial", 40);
     auto closeItem = MenuItemLabel::create(closeLabel, [this](Ref*) {
@@ -349,9 +452,8 @@ void BattleScene::openSettings()
             _settingsMask->removeFromParent();
             _settingsMask = nullptr;
         }
-        });
+    });
     closeItem->setPosition(Vec2(panelW - 40, panelH - 40));
-
     auto closeMenu = Menu::create(closeItem, nullptr);
     closeMenu->setPosition(Vec2::ZERO);
     panel->addChild(closeMenu);

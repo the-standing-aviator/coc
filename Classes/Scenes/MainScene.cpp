@@ -252,12 +252,8 @@ void MainScene::openEscMenu()
         origin.y + visibleSize.height / 2 - panelH / 2);
     _escMask->addChild(panel);
 
-    auto panelListener = EventListenerTouchOneByOne::create();
-    panelListener->setSwallowTouches(true);
-    panelListener->onTouchBegan = [](Touch*, Event*) { return true; };
-    _eventDispatcher->addEventListenerWithSceneGraphPriority(panelListener, panel);
-
-    panel->setScale(0.1f);
+    // Allow touches to pass to panel children (buttons/scroll)
+panel->setScale(0.1f);
     panel->runAction(EaseBackOut::create(ScaleTo::create(0.22f, 1.0f)));
 
     auto title = Label::createWithSystemFont("Menu", "Arial", 52);
@@ -615,7 +611,9 @@ void MainScene::setupInteraction()
     auto mouse = EventListenerMouse::create();
     mouse->onMouseScroll = [this](Event* e) {
         auto ev = static_cast<EventMouse*>(e);
-        float delta = ev->getScrollY();
+        // When a modal overlay (attack target picker) is open, let the overlay handle mouse wheel.
+        if (_attackMask && _attackMask->isVisible()) return;
+float delta = ev->getScrollY();
         float k = 1.1f;
         if (delta > 0) setZoom(_zoom / k);
         else if (delta < 0) setZoom(_zoom * k);
@@ -1113,6 +1111,7 @@ void MainScene::openAttackTargetPicker()
     auto visibleSize = Director::getInstance()->getVisibleSize();
     auto origin = Director::getInstance()->getVisibleOrigin();
 
+    // Modal mask (swallow touches)
     _attackMask = LayerColor::create(Color4B(0, 0, 0, 180));
     this->addChild(_attackMask, 250);
 
@@ -1123,68 +1122,92 @@ void MainScene::openAttackTargetPicker()
 
     const float panelW = 640.0f;
     const float panelH = 520.0f;
-    auto panel = LayerColor::create(Color4B(70, 70, 70, 255), panelW, panelH);
+
+    auto panel = LayerColor::create(Color4B(80, 80, 80, 235), panelW, panelH);
+    panel->setIgnoreAnchorPointForPosition(false);
+    panel->setAnchorPoint(Vec2(0, 0));
     panel->setPosition(origin.x + visibleSize.width / 2 - panelW / 2,
-        origin.y + visibleSize.height / 2 - panelH / 2);
+                       origin.y + visibleSize.height / 2 - panelH / 2);
     _attackMask->addChild(panel);
 
-    auto panelListener = EventListenerTouchOneByOne::create();
-    panelListener->setSwallowTouches(true);
-    panelListener->onTouchBegan = [](Touch*, Event*) { return true; };
-    _eventDispatcher->addEventListenerWithSceneGraphPriority(panelListener, panel);
+    _attackPanel = panel;
 
     auto title = Label::createWithSystemFont("Choose Target", "Arial", 48);
     title->setPosition(Vec2(panelW / 2, panelH - 50));
     panel->addChild(title);
 
-    auto metas = SaveSystem::listAllSlots();
+    // Close button (X)
+    auto closeLabel = Label::createWithSystemFont("X", "Arial", 44);
+    closeLabel->setColor(Color3B::WHITE);
+    auto closeItem = MenuItemLabel::create(closeLabel, [this](Ref*) {
+        closeAttackTargetPicker();
+    });
+    closeItem->setPosition(Vec2(panelW - 30, panelH - 40));
+    auto closeMenu = Menu::create(closeItem, nullptr);
+    closeMenu->setPosition(Vec2::ZERO);
+    panel->addChild(closeMenu, 2);
+
+    // Collect targets: all existing slots except current
+    auto metasAll = SaveSystem::listAllSlots();
     std::vector<SaveMeta> targets;
-    for (const auto& m : metas)
+    targets.reserve(metasAll.size());
+    for (const auto& m : metasAll)
     {
         if (m.exists && m.slot != SaveSystem::getCurrentSlot())
-        {
             targets.push_back(m);
-        }
     }
 
-    auto scroll = ui::ScrollView::create();
-    scroll->setDirection(ui::ScrollView::Direction::VERTICAL);
-    scroll->setContentSize(Size(panelW - 40, panelH - 140));
-    scroll->setAnchorPoint(Vec2(0.5f, 0.5f));
-    scroll->setPosition(Vec2(panelW / 2, panelH / 2 - 30));
-    scroll->setScrollBarEnabled(true);
-    panel->addChild(scroll);
+    // ScrollView
+    _attackScroll = ui::ScrollView::create();
+    _attackScroll->setDirection(ui::ScrollView::Direction::VERTICAL);
+    _attackScroll->setBounceEnabled(true);
+    _attackScroll->setContentSize(Size(panelW - 40, panelH - 140));
+    // NOTE: ui::ScrollView 默认忽略 anchorPoint（用左下角做定位）。
+    // 这里直接用左下角定位，避免出现“偏到右边”的问题。
+    _attackScroll->setAnchorPoint(Vec2::ZERO);
+    _attackScroll->ignoreAnchorPointForPosition(true);
+    _attackScroll->setPosition(Vec2(20, 60));
+    _attackScroll->setScrollBarEnabled(true);
+    panel->addChild(_attackScroll);
 
-    auto container = Node::create();
-    scroll->addChild(container);
+    _attackContent = Node::create();
+    _attackContent->setAnchorPoint(Vec2(0, 0));
+    _attackContent->setPosition(Vec2::ZERO);
+    _attackScroll->addChild(_attackContent);
 
     if (targets.empty())
     {
-        scroll->setInnerContainerSize(scroll->getContentSize());
-        container->setPosition(Vec2(scroll->getContentSize().width * 0.5f, scroll->getContentSize().height * 0.5f));
-        auto emptyLabel = Label::createWithSystemFont("No target selected", "Arial", 32);
-        emptyLabel->setPosition(Vec2(panelW / 2, panelH / 2 - 20));
-        panel->addChild(emptyLabel, 1);
+        _attackScroll->setInnerContainerSize(_attackScroll->getContentSize());
+
+        auto msg = Label::createWithSystemFont("No other saves to attack.", "Arial", 30);
+        msg->setColor(Color3B::WHITE);
+        msg->setPosition(Vec2(_attackScroll->getContentSize().width * 0.5f,
+                              _attackScroll->getContentSize().height * 0.5f));
+        _attackContent->addChild(msg);
     }
     else
     {
-        const float rowH = 60.0f;
-        float innerH = std::max(scroll->getContentSize().height, rowH * targets.size());
-        scroll->setInnerContainerSize(Size(scroll->getContentSize().width, innerH));
-        container->setPosition(Vec2(scroll->getContentSize().width * 0.5f, innerH));
+        const float rowH = 64.0f;
+        float innerH = std::max(_attackScroll->getContentSize().height, rowH * targets.size());
+        _attackScroll->setInnerContainerSize(Size(_attackScroll->getContentSize().width, innerH));
+
         for (size_t i = 0; i < targets.size(); ++i)
         {
             const auto& meta = targets[i];
-            float y = innerH - rowH * (i + 0.5f);
-            auto rowBg = LayerColor::create(Color4B(90, 90, 90, 255), scroll->getContentSize().width, rowH - 6);
-            rowBg->setAnchorPoint(Vec2(0.5f, 0.5f));
-            rowBg->setPosition(Vec2(scroll->getContentSize().width * 0.5f, y));
-            container->addChild(rowBg);
+            float y = innerH - rowH * (i + 1);
+
+            auto rowBg = LayerColor::create(Color4B(120, 120, 120, 255),
+                                            _attackScroll->getContentSize().width,
+                                            rowH - 6);
+            rowBg->setIgnoreAnchorPointForPosition(false);
+            rowBg->setAnchorPoint(Vec2(0, 0));
+            rowBg->setPosition(Vec2(0, y + 3));
+            _attackContent->addChild(rowBg);
 
             std::string labelText = StringUtils::format("[%02d] %s", meta.slot + 1, meta.name.c_str());
             auto label = Label::createWithSystemFont(labelText, "Arial", 30);
             label->setAnchorPoint(Vec2(0.0f, 0.5f));
-            label->setPosition(Vec2(20, rowH * 0.5f));
+            label->setPosition(Vec2(16, (rowH - 6) * 0.5f));
             rowBg->addChild(label);
 
             auto attackLabel = Label::createWithSystemFont("Attack", "Arial", 26);
@@ -1192,30 +1215,59 @@ void MainScene::openAttackTargetPicker()
                 SaveSystem::setBattleTargetSlot(meta.slot);
                 closeAttackTargetPicker();
                 auto scene = BattleScene::createScene();
-                Director::getInstance()->replaceScene(TransitionFade::create(0.5f, scene));
-                });
-            attackItem->setPosition(Vec2(rowBg->getContentSize().width - 100, rowH * 0.5f));
-            auto menu = Menu::create(attackItem, nullptr);
-            menu->setPosition(Vec2::ZERO);
-            rowBg->addChild(menu);
+                Director::getInstance()->replaceScene(TransitionFade::create(0.3f, scene));
+            });
+            attackItem->setPosition(Vec2(_attackScroll->getContentSize().width - 60, (rowH - 6) * 0.5f));
+            auto rowMenu = Menu::create(attackItem, nullptr);
+            rowMenu->setPosition(Vec2::ZERO);
+            rowBg->addChild(rowMenu);
         }
     }
 
-    auto closeLabel = Label::createWithSystemFont("X", "Arial", 36);
-    auto closeItem = MenuItemLabel::create(closeLabel, [this](Ref*) {
-        closeAttackTargetPicker();
-        });
-    closeItem->setPosition(Vec2(panelW - 30, panelH - 30));
-    auto closeMenu = Menu::create(closeItem, nullptr);
-    closeMenu->setPosition(Vec2::ZERO);
-    panel->addChild(closeMenu, 2);
+    // Mouse wheel support (Win32)
+    if (!_attackMouseListener)
+    {
+        _attackMouseListener = EventListenerMouse::create();
+        _attackMouseListener->onMouseScroll = [this](Event* e)
+        {
+            auto m = static_cast<EventMouse*>(e);
+            if (!_attackMask || !_attackMask->isVisible() || !_attackScroll || !_attackPanel) return;
+
+            Vec2 glPos = Director::getInstance()->convertToGL(Vec2(m->getCursorX(), m->getCursorY()));
+            Vec2 local = _attackPanel->convertToNodeSpace(glPos);
+            Rect r(0, 0, _attackPanel->getContentSize().width, _attackPanel->getContentSize().height);
+            if (!r.containsPoint(local)) return;
+
+            float dy = m->getScrollY() * 60.0f;
+            Vec2 pos = _attackScroll->getInnerContainerPosition();
+            pos.y += dy;
+
+            float minY = _attackScroll->getContentSize().height - _attackScroll->getInnerContainerSize().height;
+            if (minY > 0) minY = 0;
+
+            if (pos.y > 0) pos.y = 0;
+            if (pos.y < minY) pos.y = minY;
+
+            _attackScroll->setInnerContainerPosition(pos);
+            e->stopPropagation();
+        };
+        _eventDispatcher->addEventListenerWithSceneGraphPriority(_attackMouseListener, _attackMask);
+    }
 }
 
 void MainScene::closeAttackTargetPicker()
 {
     if (_attackMask)
     {
-        _attackMask->removeFromParent();
+        if (_attackMouseListener)
+        {
+            _eventDispatcher->removeEventListener(_attackMouseListener);
+            _attackMouseListener = nullptr;
+        }
+        _attackPanel = nullptr;
+        _attackScroll = nullptr;
+        _attackContent = nullptr;
+_attackMask->removeFromParent();
         _attackMask = nullptr;
     }
 }
