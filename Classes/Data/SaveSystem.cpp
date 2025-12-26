@@ -97,6 +97,11 @@ bool SaveSystem::load(int slot, SaveData& outData)
         {
             outData.name = meta["name"].GetString();
         }
+        // Offline production timestamp
+        if (meta.HasMember("lastRealTime") && meta["lastRealTime"].IsInt64())
+        {
+            outData.lastRealTime = meta["lastRealTime"].GetInt64();
+        }
     }
 
     if (doc.HasMember("resources") && doc["resources"].IsObject())
@@ -163,6 +168,8 @@ bool SaveSystem::save(const SaveData& data)
     rapidjson::Value meta(rapidjson::kObjectType);
     meta.AddMember("name", rapidjson::Value(data.name.c_str(), alloc), alloc);
     meta.AddMember("updatedAt", static_cast<int64_t>(std::time(nullptr)), alloc);
+    // Persist real-world timestamp for offline production.
+    meta.AddMember("lastRealTime", static_cast<int64_t>(std::time(nullptr)), alloc);
     doc.AddMember("meta", meta, alloc);
 
     rapidjson::Value res(rapidjson::kObjectType);
@@ -222,6 +229,7 @@ SaveData SaveSystem::makeDefault(int slot, const std::string& name)
     data.elixir = 1000;
     data.population = 0;
     data.timeScale = 1.0f;
+    data.lastRealTime = static_cast<int64_t>(std::time(nullptr));
     SaveBuilding th;
     th.id = 9;
     th.level = 1;

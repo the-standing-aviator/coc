@@ -14,23 +14,20 @@ public:
 private:
     void renderTargetVillage();
 
-    // ===== Loot HUD (NEW) =====
-    // Show enemy lootable resources and already looted resources.
-    void setupLootHUD();
-    void updateLootHUD();
-
     // ===== Battle countdown (NEW) =====
     // 45s scout phase -> 180s battle phase -> show return button.
     enum class Phase { Scout, Battle, End };
     void setupBattleHUD();
+    void setupLootHUD();
+    void updateLootHUD();
+
     void setupTroopBar();
     void refreshTroopBar();
 
-    // Helper to prevent accidental troop deployment when the click/tap started on the troop bar.
-    bool isPosInTroopBar(const cocos2d::Vec2& glPos) const;
-
     // Troop selection & deployment
     bool handleTroopBarClick(const cocos2d::Vec2& glPos); // return true if click was consumed by troop bar
+    bool isPosInTroopBar(const cocos2d::Vec2& glPos) const; // UI hit test without changing selection
+    bool isPosInDeployArea(const cocos2d::Vec2& worldLocal) const;
     void setSelectedTroop(int troopType);                 // troopType uses TrainingCamp::TroopType values (1..4), -1 to clear
     void deploySelectedTroop(const cocos2d::Vec2& glPos); // deploy 1 troop at world position
     void showBattleToast(const std::string& msg);
@@ -51,25 +48,25 @@ private:
     cocos2d::LayerColor* _barFill = nullptr;
     cocos2d::Menu* _returnMenu = nullptr;
 
-    // Loot HUD widgets
+    // Loot UI (top-left): lootable resources and looted resources.
     cocos2d::Node* _lootHud = nullptr;
-    cocos2d::Label* _lootTitle = nullptr;
+    cocos2d::Label* _lootableTitle = nullptr;
     cocos2d::Label* _lootedTitle = nullptr;
-    cocos2d::Label* _lootGoldText = nullptr;
-    cocos2d::Label* _lootElixirText = nullptr;
-    cocos2d::Label* _lootedGoldText = nullptr;
-    cocos2d::Label* _lootedElixirText = nullptr;
-    cocos2d::LayerColor* _lootGoldBg = nullptr;
-    cocos2d::LayerColor* _lootGoldFill = nullptr;
-    cocos2d::LayerColor* _lootElixirBg = nullptr;
-    cocos2d::LayerColor* _lootElixirFill = nullptr;
+    cocos2d::LayerColor* _lootableGoldBg = nullptr;
+    cocos2d::LayerColor* _lootableGoldFill = nullptr;
+    cocos2d::Label* _lootableGoldText = nullptr;
+    cocos2d::LayerColor* _lootableElixirBg = nullptr;
+    cocos2d::LayerColor* _lootableElixirFill = nullptr;
+    cocos2d::Label* _lootableElixirText = nullptr;
     cocos2d::LayerColor* _lootedGoldBg = nullptr;
     cocos2d::LayerColor* _lootedGoldFill = nullptr;
+    cocos2d::Label* _lootedGoldText = nullptr;
     cocos2d::LayerColor* _lootedElixirBg = nullptr;
     cocos2d::LayerColor* _lootedElixirFill = nullptr;
+    cocos2d::Label* _lootedElixirText = nullptr;
 
-    int _lootMaxGold = 0;
-    int _lootMaxElixir = 0;
+    int _lootGoldTotal = 0;
+    int _lootElixirTotal = 0;
     int _lootedGold = 0;
     int _lootedElixir = 0;
 
@@ -103,10 +100,7 @@ private:
     int _selectedTroopType = -1;
     
     long long _lastDeployMs = 0;
-    bool _hasDeployedAnyTroop = false;
-
-    bool _mouseStartedOnTroopBar = false;
-    bool _touchStartedOnTroopBar = false;
+bool _hasDeployedAnyTroop = false;
 
     // Mouse click vs drag handling
     bool _mouseDown = false;
@@ -129,8 +123,7 @@ private:
     float _tileH = 0.0f;
     cocos2d::Vec2 _anchor;
 
-    // Battle deployment area (diamond) in _world node space.
-    // Used to prevent accidental troop deployment outside the playable base area.
+    // Deployable diamond area in _world node space (cached from background UV points).
     bool _deployAreaReady = false;
     cocos2d::Vec2 _deployTop = cocos2d::Vec2::ZERO;
     cocos2d::Vec2 _deployRight = cocos2d::Vec2::ZERO;

@@ -11,6 +11,10 @@ public:
     static void pause();
     static void resume();
 
+    // Play sound effect (multiple instances allowed).
+    // `volume` is the sfx/base volume (0~1). Real output volume = base * master.
+    static int playSfx(const std::string& path, float volume = 1.0f);
+
     // Master volume (0~1). Applies to both current and future audio.
     static void setVolume(float v);
     static float getVolume();

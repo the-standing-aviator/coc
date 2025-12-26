@@ -16,6 +16,7 @@
 #include <memory>
 #include <cmath>
 #include <algorithm>
+#include <ctime>
 
 namespace {
 static float randomRealSafe(float a, float b)
@@ -101,7 +102,7 @@ bool MainScene::init()
 
     setupInteraction();
 
-    SoundManager::play("bgm/backgroundbgm.mp3", true, 0.7f);
+    SoundManager::play("music/home_music_part_1.ogg", true, 0.6f);
 
     auto btn = BuildingButton::create();
     btn->setButtonScale(0.15f);
@@ -668,16 +669,15 @@ void MainScene::openUpgradeWindowForIndex(int idx)
             if (cost.useGold) ok = ResourceManager::spendGold(cost.amount);
             else ok = ResourceManager::spendElixir(cost.amount);
             if (ok) {
+                SoundManager::playSfx("music/building_construct_07.ogg", 1.0f);
                 pb.data->level = curLv2 + 1;
                 BuildingFactory::applyStats(pb.data.get(), pb.id, pb.data->level);
-
-                // Sync the on-sprite "level" label immediately after upgrade.
+                // Sync the visible level label on top of the building sprite.
                 // The label is created in Building::createSprite() with a fixed tag.
                 if (pb.sprite) {
-                    static const int kLevelLabelTag = 20251225;
-                    auto lvl = dynamic_cast<cocos2d::Label*>(pb.sprite->getChildByTag(kLevelLabelTag));
+                    auto lvl = dynamic_cast<cocos2d::Label*>(pb.sprite->getChildByTag(20251225));
                     if (lvl) {
-                        lvl->setString(std::string("level") + std::to_string(pb.data->level));
+                        lvl->setString(cocos2d::StringUtils::format("level%d", pb.data->level));
                     }
                 }
                 _saveDirty = true;
@@ -750,7 +750,10 @@ float delta = ev->getScrollY();
                             bool canCollect = ec->canCollect();
                             if (canCollect) {
                                 int deliver = ec->collect();
-                                if (deliver > 0) _saveDirty = true;
+                                if (deliver > 0) {
+                                    SoundManager::playSfx("music/elixir_pump_pickup_07.ogg", 1.0f);
+                                    _saveDirty = true;
+                                }
                             }
                             else {
                                 _moving = true;
@@ -762,7 +765,10 @@ float delta = ev->getScrollY();
                             bool canCollect = gm->canCollect();
                             if (canCollect) {
                                 int deliver = gm->collect();
-                                if (deliver > 0) _saveDirty = true;
+                                if (deliver > 0) {
+                                    SoundManager::playSfx("music/goldmine_pickup4.ogg", 1.0f);
+                                    _saveDirty = true;
+                                }
                             }
                             else {
                                 _moving = true;
@@ -1089,6 +1095,30 @@ void MainScene::loadFromCurrentSaveOrCreate()
     if (_occupied) _occupied->clear();
 
     ResourceManager::reset();
+    // Offline production: add stored resources based on real-world elapsed time.
+    // This works even if the game is closed.
+    {
+        const int64_t now = static_cast<int64_t>(std::time(nullptr));
+        const int64_t last = data.lastRealTime;
+        if (last > 0 && now > last) {
+            const double elapsed = static_cast<double>(now - last); // seconds
+            for (auto& b : data.buildings) {
+                if (b.id == 3) {
+                    auto st = ConfigManager::getElixirCollectorStats(std::max(1, b.level));
+                    float add = static_cast<float>(st.ratePerHour * (elapsed / 3600.0));
+                    b.stored = std::min((float)st.capacity, b.stored + add);
+                }
+                else if (b.id == 5) {
+                    auto st = ConfigManager::getGoldMineStats(std::max(1, b.level));
+                    float add = static_cast<float>(st.ratePerHour * (elapsed / 3600.0));
+                    b.stored = std::min((float)st.capacity, b.stored + add);
+                }
+            }
+        }
+        data.lastRealTime = now;
+        _saveDirty = true; // ensure lastRealTime is saved back
+    }
+
     _timeScale = data.timeScale > 0.0f ? data.timeScale : 1.0f;
 
     for (const auto& b : data.buildings)
@@ -1144,6 +1174,8 @@ void MainScene::saveToCurrentSlot(bool force)
     data.elixir = ResourceManager::getElixir();
     data.population = ResourceManager::getPopulation();
     data.timeScale = _timeScale;
+    data.lastRealTime = static_cast<int64_t>(std::time(nullptr));
+
 
 
 data.trainedTroops.clear();

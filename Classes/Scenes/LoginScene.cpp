@@ -3,6 +3,7 @@
 #include "Data/SaveSystem.h"
 #include "Scenes/MainScene.h"
 #include "Scenes/MenuScene.h"
+#include "Managers/SoundManager.h"
 
 #include "ui/CocosGUI.h"
 
@@ -44,6 +45,9 @@ bool LoginScene::init()
     // Build and show selector
     buildSaveUI();
     openSaveSelector();
+
+    // UI jingle on entering save selector.
+    SoundManager::playSfx("music/loading_screen_jingle.ogg", 1.0f);
 
     return true;
 }

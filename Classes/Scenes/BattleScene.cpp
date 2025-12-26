@@ -75,13 +75,12 @@ void BattleScene::renderTargetVillage()
         return;
     }
 
-    // Cache lootable resources for the HUD.
-    // We use the enemy save's resource values as the total lootable pool.
-    _lootMaxGold = std::max(0, data.gold);
-    _lootMaxElixir = std::max(0, data.elixir);
+    // Cache enemy village resources as the maximum lootable amount.
+    _lootGoldTotal = data.gold;
+    _lootElixirTotal = data.elixir;
     _lootedGold = 0;
     _lootedElixir = 0;
-    updateLootHUD();
+    if (_lootHud) updateLootHUD();
 
     auto imageUvToWorld = [this](const Vec2& uv) {
         if (!_background) return Vec2::ZERO;
@@ -101,18 +100,18 @@ void BattleScene::renderTargetVillage()
     Vec2 right = _world->convertToNodeSpace(imageUvToWorld(uvRight));
     Vec2 bottom = _world->convertToNodeSpace(imageUvToWorld(uvBottom));
     Vec2 left = _world->convertToNodeSpace(imageUvToWorld(uvLeft));
-
-    // Cache the playable deployment diamond (in _world space) for input validation.
-    _deployTop = top;
-    _deployRight = right;
-    _deployBottom = bottom;
-    _deployLeft = left;
-    _deployAreaReady = true;
     float Lr = right.x - left.x;
     float Lt = top.y - bottom.y;
     _tileW = (2.0f * Lr) / (_cols + _rows);
     _tileH = (2.0f * Lt) / (_cols + _rows);
     _anchor = top;
+
+    // Cache deployable diamond corners (node space of _world).
+    _deployTop = top;
+    _deployRight = right;
+    _deployBottom = bottom;
+    _deployLeft = left;
+    _deployAreaReady = true;
 
     std::sort(data.buildings.begin(), data.buildings.end(), [](const SaveBuilding& a, const SaveBuilding& b) {
         int sa = a.r + a.c;
@@ -135,9 +134,6 @@ void BattleScene::renderTargetVillage()
         sprite->setScale(_buildingScale * _buildingScaleById[idx]);
         _world->addChild(sprite, 3 + bInfo.r + bInfo.c);
     }
-
-    // Update HUD after caching values (HUD may not exist yet during init).
-    updateLootHUD();
 }
 
 bool BattleScene::init()
@@ -191,7 +187,6 @@ bool BattleScene::init()
         _mouseConsumed = false;
         _mouseMoved = false;
         _mouseDownPos = glPos;
-        _mouseStartedOnTroopBar = isPosInTroopBar(glPos);
 
         _dragging = false;
         _dragLast = Vec2(m->getCursorX(), m->getCursorY());
@@ -208,12 +203,6 @@ bool BattleScene::init()
 
         Vec2 glPos = Director::getInstance()->convertToGL(Vec2(m->getCursorX(), m->getCursorY()));
 
-        // IMPORTANT:
-        // Some platforms / DPI settings may cause the press-start detection to miss the
-        // troop bar occasionally. Always block deployment if the release position is
-        // still inside the troop bar.
-        bool endedOnTroopBar = isPosInTroopBar(glPos);
-
         if (!_mouseDown) return;
 
         // Stop dragging if we were panning.
@@ -221,7 +210,7 @@ bool BattleScene::init()
             _dragging = false;
         } else {
             // Treat as a click on the map if it wasn't consumed by UI and wasn't a drag.
-            if (!_mouseConsumed && !_mouseMoved && !_mouseStartedOnTroopBar && !endedOnTroopBar) {
+            if (!_mouseConsumed && !_mouseMoved) {
                 deploySelectedTroop(glPos);
             }
         }
@@ -229,7 +218,6 @@ bool BattleScene::init()
         _mouseDown = false;
         _mouseConsumed = false;
         _mouseMoved = false;
-        _mouseStartedOnTroopBar = false;
     };
 
     mouse->onMouseMove = [this](Event* e) {
@@ -269,7 +257,6 @@ bool BattleScene::init()
         _touchConsumed = false;
         _touchMoved = false;
         _touchDownPos = glPos;
-        _touchStartedOnTroopBar = isPosInTroopBar(glPos);
         // First: troop bar selection.
         if (handleTroopBarClick(glPos)) {
             _touchConsumed = true;
@@ -301,23 +288,16 @@ bool BattleScene::init()
     touch->onTouchEnded = [this](Touch* t, Event*) {
         Vec2 glPos = t->getLocation();
         if (!_touchDown) return;
-
-        // IMPORTANT:
-        // Just like mouse input, always block deployment if the finger is
-        // released on top of the troop bar UI.
-        bool endedOnTroopBar = isPosInTroopBar(glPos);
-
         if (_dragging) {
             _dragging = false;
         } else {
-            if (!_touchConsumed && !_touchMoved && !_touchStartedOnTroopBar && !endedOnTroopBar) {
+            if (!_touchConsumed && !_touchMoved) {
                 deploySelectedTroop(glPos);
             }
         }
         _touchDown = false;
         _touchConsumed = false;
         _touchMoved = false;
-        _touchStartedOnTroopBar = false;
     };
     _eventDispatcher->addEventListenerWithSceneGraphPriority(touch, this);
 
@@ -328,7 +308,6 @@ bool BattleScene::init()
     // Battle HUD & countdown
     setupBattleHUD();
     setupTroopBar();
-    setupLootHUD();
         _troopCounts = SaveSystem::getBattleReadyTroops();
     refreshTroopBar();
     startPhase(Phase::Scout, 45.0f);
@@ -385,6 +364,8 @@ void BattleScene::setupBattleHUD()
     _barFill->setScaleX(1.0f);
     _hud->addChild(_barFill);
 
+    setupLootHUD();
+
     auto returnLabel = Label::createWithSystemFont("Return", "Arial", 44);
     auto returnItem = MenuItemLabel::create(returnLabel, [this](Ref*) {
         SaveSystem::setBattleTargetSlot(-1);
@@ -400,6 +381,17 @@ void BattleScene::setupBattleHUD()
 void BattleScene::startPhase(Phase p, float durationSec)
 {
     _phase = p;
+
+    // Phase music mapping (Resources/music).
+    if (p == Phase::Scout) {
+        SoundManager::play("music/capital_pre_battle_music.ogg", true, 0.6f);
+    }
+    else if (p == Phase::Battle) {
+        SoundManager::play("music/capital_battle_music.ogg", true, 0.6f);
+    }
+    else if (p == Phase::End) {
+        SoundManager::playSfx("music/capital_battle_end.ogg", 1.0f);
+    }
     _phaseTotal = std::max(0.001f, durationSec);
     _phaseRemaining = durationSec;
     updateBattleHUD();
@@ -428,6 +420,8 @@ void BattleScene::updateBattleHUD()
     float percent = _phaseRemaining / _phaseTotal;
     percent = std::max(0.0f, std::min(1.0f, percent));
     _barFill->setScaleX(percent);
+
+    updateLootHUD();
 }
 
 void BattleScene::showReturnButton()
@@ -692,116 +686,6 @@ void BattleScene::setupTroopBar()
     _troopBar = bg;
 }
 
-bool BattleScene::isPosInTroopBar(const cocos2d::Vec2& glPos) const
-{
-    if (!_troopBar) return false;
-
-    // Test troop slots first (icons may extend above the bar background).
-    Vec2 local = _troopBar->convertToNodeSpace(glPos);
-    for (const auto& slot : _troopSlots) {
-        if (!slot.root) continue;
-        Rect r = slot.root->getBoundingBox();
-        if (r.containsPoint(local)) return true;
-    }
-
-    // Then test the background bar itself.
-    Rect barRect = _troopBar->getBoundingBox();
-    return barRect.containsPoint(glPos);
-}
-
-void BattleScene::setupLootHUD()
-{
-    if (_lootHud) return;
-
-    auto vs = Director::getInstance()->getVisibleSize();
-    auto origin = Director::getInstance()->getVisibleOrigin();
-
-    _lootHud = Node::create();
-    this->addChild(_lootHud, 60);
-
-    float panelX = origin.x + 16.0f;
-    float panelY = origin.y + vs.height - 24.0f;
-
-    float barW = 240.0f;
-    float barH = 12.0f;
-    float rowGap = 6.0f;
-
-    _lootTitle = Label::createWithSystemFont("Lootable", "Arial", 18);
-    _lootTitle->setAnchorPoint(Vec2(0, 1));
-    _lootTitle->enableOutline(Color4B::BLACK, 2);
-    _lootTitle->setPosition(Vec2(panelX, panelY));
-    _lootHud->addChild(_lootTitle);
-
-    auto makeBar = [&](float yTop,
-                       LayerColor*& outBg,
-                       LayerColor*& outFill,
-                       Label*& outText,
-                       const Color4B& fillColor)
-    {
-        outBg = LayerColor::create(Color4B(30, 30, 30, 180), barW, barH);
-        outBg->setAnchorPoint(Vec2(0, 1));
-        outBg->setPosition(Vec2(panelX, yTop));
-        _lootHud->addChild(outBg);
-
-        outFill = LayerColor::create(fillColor, barW, barH);
-        outFill->setAnchorPoint(Vec2(0, 1));
-        outFill->setPosition(Vec2(panelX, yTop));
-        outFill->setScaleX(1.0f);
-        _lootHud->addChild(outFill);
-
-        outText = Label::createWithSystemFont("", "Arial", 14);
-        outText->setAnchorPoint(Vec2(0, 0.5f));
-        outText->enableOutline(Color4B::BLACK, 2);
-        outText->setPosition(Vec2(panelX + 4.0f, yTop - barH * 0.5f));
-        _lootHud->addChild(outText, 2);
-    };
-
-    float y = panelY - 22.0f;
-    makeBar(y, _lootGoldBg, _lootGoldFill, _lootGoldText, Color4B(230, 200, 60, 220));
-    y -= (barH + rowGap);
-    makeBar(y, _lootElixirBg, _lootElixirFill, _lootElixirText, Color4B(170, 90, 230, 220));
-
-    _lootedTitle = Label::createWithSystemFont("Looted", "Arial", 18);
-    _lootedTitle->setAnchorPoint(Vec2(0, 1));
-    _lootedTitle->enableOutline(Color4B::BLACK, 2);
-    _lootedTitle->setPosition(Vec2(panelX, y - 14.0f));
-    _lootHud->addChild(_lootedTitle);
-
-    y -= 36.0f;
-    makeBar(y, _lootedGoldBg, _lootedGoldFill, _lootedGoldText, Color4B(230, 200, 60, 220));
-    y -= (barH + rowGap);
-    makeBar(y, _lootedElixirBg, _lootedElixirFill, _lootedElixirText, Color4B(170, 90, 230, 220));
-
-    updateLootHUD();
-}
-
-void BattleScene::updateLootHUD()
-{
-    if (!_lootHud) return;
-
-    int maxGold = std::max(1, _lootMaxGold);
-    int maxElixir = std::max(1, _lootMaxElixir);
-
-    int remainGold = std::max(0, _lootMaxGold - _lootedGold);
-    int remainElixir = std::max(0, _lootMaxElixir - _lootedElixir);
-
-    auto setBar = [&](LayerColor* fill, Label* text, int cur, int max, const char* prefix) {
-        if (fill) {
-            float p = (max > 0) ? ((float)cur / (float)max) : 0.0f;
-            p = std::max(0.0f, std::min(1.0f, p));
-            fill->setScaleX(p);
-        }
-        if (text) {
-            text->setString(StringUtils::format("%s %d/%d", prefix, cur, max));
-        }
-    };
-
-    setBar(_lootGoldFill, _lootGoldText, remainGold, maxGold, "Gold");
-    setBar(_lootElixirFill, _lootElixirText, remainElixir, maxElixir, "Elixir");
-    setBar(_lootedGoldFill, _lootedGoldText, std::max(0, _lootedGold), maxGold, "Gold");
-    setBar(_lootedElixirFill, _lootedElixirText, std::max(0, _lootedElixir), maxElixir, "Elixir");
-}
-
 void BattleScene::refreshTroopBar()
 {
     if (!_troopBar) return;
@@ -901,6 +785,49 @@ bool BattleScene::handleTroopBarClick(const cocos2d::Vec2& glPos)
     return false;
 }
 
+bool BattleScene::isPosInTroopBar(const cocos2d::Vec2& glPos) const
+{
+    if (!_troopBar) return false;
+
+    // Test troop slots first. Icons may extend above the bar background.
+    cocos2d::Vec2 local = _troopBar->convertToNodeSpace(glPos);
+    for (const auto& slot : _troopSlots) {
+        if (!slot.root) continue;
+        cocos2d::Rect r = slot.root->getBoundingBox();
+        if (r.containsPoint(local)) return true;
+    }
+
+    // Test bar background in its own local space (robust even if parent transforms).
+    cocos2d::Size s = _troopBar->getContentSize();
+    cocos2d::Rect bg(0, 0, s.width, s.height);
+    return bg.containsPoint(local);
+}
+
+static float cross2(const cocos2d::Vec2& a, const cocos2d::Vec2& b)
+{
+    return a.x * b.y - a.y * b.x;
+}
+
+static bool pointInTriangle(const cocos2d::Vec2& p, const cocos2d::Vec2& a, const cocos2d::Vec2& b, const cocos2d::Vec2& c)
+{
+    float c1 = cross2(b - a, p - a);
+    float c2 = cross2(c - b, p - b);
+    float c3 = cross2(a - c, p - c);
+    bool hasNeg = (c1 < 0.0f) || (c2 < 0.0f) || (c3 < 0.0f);
+    bool hasPos = (c1 > 0.0f) || (c2 > 0.0f) || (c3 > 0.0f);
+    return !(hasNeg && hasPos);
+}
+
+bool BattleScene::isPosInDeployArea(const cocos2d::Vec2& worldLocal) const
+{
+    if (!_deployAreaReady) return true; // if not ready, do not block deployment
+
+    // Diamond as 2 triangles: (top, right, bottom) and (top, bottom, left).
+    if (pointInTriangle(worldLocal, _deployTop, _deployRight, _deployBottom)) return true;
+    if (pointInTriangle(worldLocal, _deployTop, _deployBottom, _deployLeft)) return true;
+    return false;
+}
+
 void BattleScene::setSelectedTroop(int troopType)
 {
     _selectedTroopType = troopType;
@@ -939,10 +866,11 @@ void BattleScene::deploySelectedTroop(const cocos2d::Vec2& glPos)
     // Prevent duplicate deployment when multiple input systems fire for a single click/tap.
     long long nowMs = std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::steady_clock::now().time_since_epoch()).count();
-    // 120ms is a safe window for desktops where a click may also trigger touch-like events.
-    if (nowMs - _lastDeployMs < 120) return;
+    if (nowMs - _lastDeployMs < 50) return;
     _lastDeployMs = nowMs;
 
+    // Safety guard: clicking on troop UI should never deploy or consume troops.
+    if (isPosInTroopBar(glPos)) return;
 
     if (_selectedTroopType == -1) return;
 
@@ -955,37 +883,11 @@ void BattleScene::deploySelectedTroop(const cocos2d::Vec2& glPos)
     bool deployed = false;
 
     // Spawn a simple sprite at the clicked position (world space).
-    // Safety: never deploy when clicking outside the playable base diamond.
     if (_world) {
         Vec2 worldLocal = _world->convertToNodeSpace(glPos);
 
-        // Reject deployment if the click is outside the playable base diamond.
-        // This prevents accidental deployments when clicking UI, forest areas, or letterboxed areas.
-        if (_deployAreaReady) {
-            auto pointInConvexQuad = [](const Vec2& p, const Vec2& a, const Vec2& b,
-                                        const Vec2& c, const Vec2& d) {
-                // Quad is expected to be convex and ordered (a->b->c->d).
-                auto cross = [](const Vec2& u, const Vec2& v) { return u.cross(v); };
-                const float eps = 1e-3f;
-
-                Vec2 pts[4] = { a, b, c, d };
-                float prev = 0.0f;
-                for (int i = 0; i < 4; ++i) {
-                    Vec2 p0 = pts[i];
-                    Vec2 p1 = pts[(i + 1) % 4];
-                    float cr = cross(p1 - p0, p - p0);
-                    if (std::fabs(cr) <= eps) continue; // on edge
-                    if (prev == 0.0f) prev = cr;
-                    else {
-                        if (cr * prev < 0.0f) return false;
-                    }
-                }
-                return true;
-            };
-
-            bool inside = pointInConvexQuad(worldLocal, _deployTop, _deployRight, _deployBottom, _deployLeft);
-            if (!inside) return;
-        }
+        // Only allow deployment inside the main diamond area (map tiles).
+        if (!isPosInDeployArea(worldLocal)) return;
         const char* path = nullptr;
         if (_selectedTroopType == (int)TrainingCamp::TROOP_BARBARIAN) path = "barbarian/barbarian_stand.png";
         else if (_selectedTroopType == (int)TrainingCamp::TROOP_ARCHER) path = "archor/archor_stand.png";
@@ -996,8 +898,8 @@ void BattleScene::deploySelectedTroop(const cocos2d::Vec2& glPos)
         if (troop) {
             troop->setPosition(worldLocal);
             {
-            float maxW = (_tileW > 0.0f) ? (_tileW * 0.90f) : 48.0f;
-            float maxH = (_tileH > 0.0f) ? (_tileH * 0.90f) : 48.0f;
+            float maxW = (_tileW > 0.0f) ? (_tileW * 0.55f) : 48.0f;
+            float maxH = (_tileH > 0.0f) ? (_tileH * 0.55f) : 48.0f;
             Size cs = troop->getContentSize();
             float s1 = (cs.width > 0.0f) ? (maxW / cs.width) : 1.0f;
             float s2 = (cs.height > 0.0f) ? (maxH / cs.height) : 1.0f;
@@ -1013,6 +915,20 @@ void BattleScene::deploySelectedTroop(const cocos2d::Vec2& glPos)
 
     if (!deployed) return;
 
+    // Play deploy SFX (Resources/music).
+    if (_selectedTroopType == (int)TrainingCamp::TROOP_ARCHER) {
+        SoundManager::playSfx("music/archer_deploy_09.ogg", 1.0f);
+    }
+    else if (_selectedTroopType == (int)TrainingCamp::TROOP_GIANT) {
+        SoundManager::playSfx("music/giant_deploy_04v3.ogg", 1.0f);
+    }
+    else if (_selectedTroopType == (int)TrainingCamp::TROOP_WALLBREAKER) {
+        SoundManager::playSfx("music/troop_housing_placing_08.ogg", 1.0f);
+    }
+    else {
+        SoundManager::playSfx("music/troop_housing_placing_06.ogg", 1.0f);
+    }
+
     // First successful deployment skips scout phase immediately.
     if (!_hasDeployedAnyTroop) {
         _hasDeployedAnyTroop = true;
@@ -1024,3 +940,113 @@ void BattleScene::deploySelectedTroop(const cocos2d::Vec2& glPos)
     cnt = std::max(0, cnt - 1);
     refreshTroopBar();
 }
+
+
+
+
+void BattleScene::setupLootHUD()
+{
+    if (_lootHud) return;
+    if (!_hud) return;
+
+    auto visibleSize = cocos2d::Director::getInstance()->getVisibleSize();
+    auto origin = cocos2d::Director::getInstance()->getVisibleOrigin();
+
+    _lootHud = cocos2d::Node::create();
+    _hud->addChild(_lootHud, 1);
+
+    const float marginX = 10.0f;
+    const float marginY = 10.0f;
+    const float textW = 95.0f;
+    const float barW = 145.0f;
+    const float barH = 10.0f;
+    const float rowH = 18.0f;
+    const float gapY = 4.0f;
+
+    float x0 = origin.x + marginX;
+    float yTop = origin.y + visibleSize.height - marginY;
+
+    // Section titles
+    _lootableTitle = cocos2d::Label::createWithSystemFont("Lootable", "Arial", 18);
+    _lootableTitle->setAnchorPoint(cocos2d::Vec2(0.0f, 1.0f));
+    _lootableTitle->setPosition(cocos2d::Vec2(x0, yTop));
+    _lootableTitle->setTextColor(cocos2d::Color4B::WHITE);
+    _lootHud->addChild(_lootableTitle);
+
+    float y = yTop - 24.0f;
+
+    auto createRow = [&](cocos2d::Label*& text,
+                         cocos2d::LayerColor*& bg,
+                         cocos2d::LayerColor*& fill,
+                         const cocos2d::Color4B& fillColor,
+                         float yCenter)
+    {
+        text = cocos2d::Label::createWithSystemFont("", "Arial", 14);
+        text->setAnchorPoint(cocos2d::Vec2(0.0f, 0.5f));
+        text->setPosition(cocos2d::Vec2(x0, yCenter));
+        text->setTextColor(cocos2d::Color4B::WHITE);
+        _lootHud->addChild(text);
+
+        bg = cocos2d::LayerColor::create(cocos2d::Color4B(40, 40, 40, 200), barW, barH);
+        bg->setAnchorPoint(cocos2d::Vec2(0.0f, 0.5f));
+        bg->setPosition(cocos2d::Vec2(x0 + textW, yCenter));
+        _lootHud->addChild(bg);
+
+        fill = cocos2d::LayerColor::create(fillColor, barW, barH);
+        fill->setAnchorPoint(cocos2d::Vec2(0.0f, 0.5f));
+        fill->setPosition(bg->getPosition());
+        fill->setScaleX(1.0f);
+        _lootHud->addChild(fill);
+    };
+
+    createRow(_lootableGoldText, _lootableGoldBg, _lootableGoldFill, cocos2d::Color4B(235, 200, 50, 220), y);
+    y -= (rowH + gapY);
+    createRow(_lootableElixirText, _lootableElixirBg, _lootableElixirFill, cocos2d::Color4B(170, 70, 200, 220), y);
+
+    y -= 26.0f;
+    _lootedTitle = cocos2d::Label::createWithSystemFont("Looted", "Arial", 18);
+    _lootedTitle->setAnchorPoint(cocos2d::Vec2(0.0f, 1.0f));
+    _lootedTitle->setPosition(cocos2d::Vec2(x0, y + 18.0f));
+    _lootedTitle->setTextColor(cocos2d::Color4B::WHITE);
+    _lootHud->addChild(_lootedTitle);
+
+    y -= 6.0f;
+    createRow(_lootedGoldText, _lootedGoldBg, _lootedGoldFill, cocos2d::Color4B(235, 200, 50, 220), y);
+    y -= (rowH + gapY);
+    createRow(_lootedElixirText, _lootedElixirBg, _lootedElixirFill, cocos2d::Color4B(170, 70, 200, 220), y);
+
+    updateLootHUD();
+}
+
+void BattleScene::updateLootHUD()
+{
+    if (!_lootHud) return;
+
+    int goldTotal = std::max(0, _lootGoldTotal);
+    int elixirTotal = std::max(0, _lootElixirTotal);
+
+    int goldLooted = std::max(0, _lootedGold);
+    int elixirLooted = std::max(0, _lootedElixir);
+
+    goldLooted = (goldTotal > 0) ? std::min(goldLooted, goldTotal) : 0;
+    elixirLooted = (elixirTotal > 0) ? std::min(elixirLooted, elixirTotal) : 0;
+
+    int goldRemain = std::max(0, goldTotal - goldLooted);
+    int elixirRemain = std::max(0, elixirTotal - elixirLooted);
+
+    float goldRemainRatio = (goldTotal > 0) ? (float)goldRemain / (float)goldTotal : 0.0f;
+    float elixirRemainRatio = (elixirTotal > 0) ? (float)elixirRemain / (float)elixirTotal : 0.0f;
+    float goldLootedRatio = (goldTotal > 0) ? (float)goldLooted / (float)goldTotal : 0.0f;
+    float elixirLootedRatio = (elixirTotal > 0) ? (float)elixirLooted / (float)elixirTotal : 0.0f;
+
+    if (_lootableGoldText) _lootableGoldText->setString(cocos2d::StringUtils::format("Gold %d/%d", goldRemain, goldTotal));
+    if (_lootableElixirText) _lootableElixirText->setString(cocos2d::StringUtils::format("Elixir %d/%d", elixirRemain, elixirTotal));
+    if (_lootedGoldText) _lootedGoldText->setString(cocos2d::StringUtils::format("Gold %d/%d", goldLooted, goldTotal));
+    if (_lootedElixirText) _lootedElixirText->setString(cocos2d::StringUtils::format("Elixir %d/%d", elixirLooted, elixirTotal));
+
+    if (_lootableGoldFill) _lootableGoldFill->setScaleX(std::min(1.0f, std::max(0.0f, goldRemainRatio)));
+    if (_lootableElixirFill) _lootableElixirFill->setScaleX(std::min(1.0f, std::max(0.0f, elixirRemainRatio)));
+    if (_lootedGoldFill) _lootedGoldFill->setScaleX(std::min(1.0f, std::max(0.0f, goldLootedRatio)));
+    if (_lootedElixirFill) _lootedElixirFill->setScaleX(std::min(1.0f, std::max(0.0f, elixirLootedRatio)));
+}
+

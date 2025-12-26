@@ -41,6 +41,7 @@ struct SaveData
     int elixir = 0;
     int population = 0;
     float timeScale = 1.0f;
+    int64_t lastRealTime = 0; // unix seconds
     std::vector<SaveBuilding> buildings;
     std::vector<SaveTrainedTroop> trainedTroops;
 
