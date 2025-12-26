@@ -13,7 +13,7 @@ Barbarian::Barbarian()
     // Default lvl1 stats (CoC-style placeholders)
     hpMax = 45;
     hp = hpMax;
-    damage = 8;
+    damage = 9;  // Level 1: 9 damage per hit (CoC reference)
     attackInterval = 1.0f;
     attackRange = 24.0f;   // melee range (pixels)
     moveSpeed = 70.0f;

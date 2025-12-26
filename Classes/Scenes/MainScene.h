@@ -4,7 +4,9 @@
 #include <vector>
 #include <memory>
 #include <unordered_map>
+#include <string>
 struct SaveBuilding;
+struct SaveData;
 class MainScene : public cocos2d::Scene
 {
 public:
@@ -22,6 +24,18 @@ public:
     void setTimeScale(float s);
     virtual void onExit() override;
 private:
+    struct StandTroopInfo
+    {
+        int type = 0;               // TrainingCamp::TroopType (1..4)
+        int r = 0;
+        int c = 0;
+        cocos2d::Sprite* sprite = nullptr; // owned by _standTroopLayer
+    };
+
+    void removeStandTroopOfType(int troopType);
+    void restoreStandTroopsFromSave(const SaveData& data);
+    void applyStandTroopsToTrainingCamps();
+
     struct PlacedBuilding { int id; int r; int c; cocos2d::Sprite* sprite; std::shared_ptr<class Building> data; };
     std::vector<PlacedBuilding> _buildings;
     bool _moving = false;
@@ -40,6 +54,10 @@ private:
     cocos2d::DrawNode* _grid = nullptr;
     cocos2d::Sprite* _background = nullptr;
     cocos2d::Node* _world = nullptr;
+    // Stand troop visuals in main village (spawned when training troops)
+    cocos2d::Node* _standTroopLayer = nullptr;
+    std::vector<StandTroopInfo> _standTroops; // trained troops shown as stand sprites in village
+
     float _zoom = 1.0f;
     float _minZoom = 0.6f;
     float _maxZoom = 2.0f;
@@ -101,4 +119,27 @@ private:
     cocos2d::ui::ScrollView* _attackScroll = nullptr;
     cocos2d::Node* _attackContent = nullptr;
     cocos2d::EventListenerMouse* _attackMouseListener = nullptr;
+
+    // Training camp UI (Train window for TroopBuilding/TrainingCamp)
+    void openTrainingCampPicker(int buildingIndex);
+    void closeTrainingCampPicker();
+    void refreshTrainingCampUI();
+    void showTrainingToast(const std::string& msg);
+
+    // Collect all READY troops from all TrainingCamps (for BattleScene troop bar)
+    std::unordered_map<int, int> collectAllReadyTroops() const;
+
+    // Spawn a "standing" troop sprite in a random cell inside any Barracks (id=7).
+    // troopType uses TrainingCamp::TroopType values (1..4).
+    void spawnStandTroop(int troopType);
+    cocos2d::Sprite* createStandTroopSprite(int troopType) const;
+
+    cocos2d::LayerColor* _trainMask = nullptr;
+    cocos2d::Node* _trainPanel = nullptr;
+    cocos2d::Node* _trainReadyRow = nullptr;    //
+    cocos2d::Node* _trainSelectRow = nullptr;   //
+    cocos2d::Label* _trainCapLabel = nullptr;   //
+    cocos2d::EventListenerMouse* _trainMouseListener = nullptr;
+    int _trainCampIndex = -1;
+    int _trainLastSig = 0;
 };

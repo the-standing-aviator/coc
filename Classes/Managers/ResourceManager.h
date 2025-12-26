@@ -33,8 +33,13 @@ public:
     static bool spendPopulation(int v);
     static void reset();
     static void onChanged(const std::function<void(const Resources&)>& cb);
+    // 人口容量管理
+    static void addPopulationCap(int amount);
+   
 private:
     static void notify();
     static Resources _res;
     static std::function<void(const Resources&)> _callback;
+    static int s_populationCap;
+    static int s_population;
 };

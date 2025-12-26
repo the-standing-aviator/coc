@@ -3,6 +3,16 @@
 
 Resources ResourceManager::_res;
 std::function<void(const Resources&)> ResourceManager::_callback;
+int ResourceManager::s_populationCap = 0;
+int ResourceManager::s_population = 0;
+
+void ResourceManager::addPopulationCap(int amount) {
+    s_populationCap += amount;
+    s_populationCap = std::max(0, s_populationCap);
+}
+void ResourceManager::setPopulation(int pop) {
+    s_population = std::max(0, std::min(pop, s_populationCap));
+}
 
 const Resources& ResourceManager::get() { return _res; }
 int ResourceManager::getElixir() { return _res.elixir; }
@@ -30,7 +40,6 @@ void ResourceManager::setPopulationCap(int v) {
 
 void ResourceManager::setElixir(int v) { _res.elixir = std::max(0, v); notify(); }
 void ResourceManager::setGold(int v) { _res.gold = std::max(0, v); notify(); }
-void ResourceManager::setPopulation(int v) { _res.population = std::max(0, v); notify(); }
 
 void ResourceManager::addElixir(int v) { setElixir(_res.elixir + v); }
 void ResourceManager::addGold(int v) { setGold(_res.gold + v); }

@@ -14,6 +14,12 @@ private:
     cocos2d::Label* _goldLabel = nullptr;
     cocos2d::Label* _elixirLabel = nullptr;
     cocos2d::Label* _popLabel = nullptr;
+
+    // Progress bars (gold & elixir)
+    cocos2d::LayerColor* _goldBarBg = nullptr;
+    cocos2d::LayerColor* _goldBarFill = nullptr;
+    cocos2d::LayerColor* _elixirBarBg = nullptr;
+    cocos2d::LayerColor* _elixirBarFill = nullptr;
     cocos2d::LayerColor* _goldBg = nullptr;
     cocos2d::LayerColor* _elixirBg = nullptr;
     cocos2d::LayerColor* _popBg = nullptr;
@@ -29,4 +35,10 @@ private:
     float _padX = 10.f;
     float _padY = 6.f;
     float _gap = 6.f;
+
+    // Cached values for progress computation
+    int _gold = 0;
+    int _goldCap = 1;
+    int _elixir = 0;
+    int _elixirCap = 1;
 };

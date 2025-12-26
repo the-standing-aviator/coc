@@ -10,6 +10,7 @@ USING_NS_CC;
 
 int SaveSystem::s_currentSlot = 0;
 int SaveSystem::s_battleTargetSlot = -1;
+std::unordered_map<int, int> SaveSystem::s_battleReadyTroops;
 
 void SaveSystem::setCurrentSlot(int slot)
 {
@@ -130,7 +131,25 @@ bool SaveSystem::load(int slot, SaveData& outData)
         }
     }
 
-    return true;
+    
+// Trained troops (stand units in village)
+if (doc.HasMember("trainedTroops") && doc["trainedTroops"].IsArray())
+{
+    const auto& arr = doc["trainedTroops"];
+    for (rapidjson::SizeType i = 0; i < arr.Size(); ++i)
+    {
+        const auto& it = arr[i];
+        if (!it.IsObject()) continue;
+
+        SaveTrainedTroop t;
+        if (it.HasMember("type") && it["type"].IsInt()) t.type = it["type"].GetInt();
+        if (it.HasMember("r") && it["r"].IsInt()) t.r = it["r"].GetInt();
+        if (it.HasMember("c") && it["c"].IsInt()) t.c = it["c"].GetInt();
+        if (t.type > 0) outData.trainedTroops.push_back(t);
+    }
+}
+
+return true;
 }
 
 bool SaveSystem::save(const SaveData& data)
@@ -168,6 +187,19 @@ bool SaveSystem::save(const SaveData& data)
     }
     doc.AddMember("buildings", arr, alloc);
 
+// Trained troops (stand units in village)
+rapidjson::Value tArr(rapidjson::kArrayType);
+for (const auto& t : data.trainedTroops)
+{
+    rapidjson::Value o(rapidjson::kObjectType);
+    o.AddMember("type", t.type, alloc);
+    o.AddMember("r", t.r, alloc);
+    o.AddMember("c", t.c, alloc);
+    tArr.PushBack(o, alloc);
+}
+doc.AddMember("trainedTroops", tArr, alloc);
+
+
     rapidjson::StringBuffer buffer;
     rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
     doc.Accept(writer);
@@ -199,4 +231,14 @@ SaveData SaveSystem::makeDefault(int slot, const std::string& name)
     th.stored = 0.0f;
     data.buildings.push_back(th);
     return data;
+}
+
+void SaveSystem::setBattleReadyTroops(const std::unordered_map<int, int>& troops)
+{
+    s_battleReadyTroops = troops;
+}
+
+const std::unordered_map<int, int>& SaveSystem::getBattleReadyTroops()
+{
+    return s_battleReadyTroops;
 }

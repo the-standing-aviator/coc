@@ -21,7 +21,7 @@ public:
         stored = std::min((float)capacity, stored + add);
     }
     bool canCollect() const {
-        float thresholdUnits = std::max(0, chunkMinutes);
+        float thresholdUnits = std::max(0.0f, (float)chunkMinutes);
         return stored >= thresholdUnits && ResourceManager::getElixir() < ResourceManager::getElixirCap();
     }
     int collect() {
@@ -91,7 +91,7 @@ public:
         stored = std::min((float)capacity, stored + add);
     }
     bool canCollect() const {
-        float thresholdUnits = std::max(0, chunkMinutes);
+        float thresholdUnits = std::max(0.0f, (float)chunkMinutes);
         return stored >= thresholdUnits && ResourceManager::getGold() < ResourceManager::getGoldCap();
     }
     int collect() {

@@ -17,10 +17,40 @@
 #include <cmath>
 #include <algorithm>
 
+namespace {
+static float randomRealSafe(float a, float b)
+{
+    if (std::isnan(a) || std::isnan(b)) return 0.0f;
+    if (a > b) std::swap(a, b);
+    if (a == b) return a;
+    return cocos2d::RandomHelper::random_real(a, b);
+}
+}
+
 #include "ui/CocosGUI.h"
 
 #ifdef _WIN32
 #include <windows.h>
+#include <cstdio>
+
+namespace {
+    // Create a cocos2d::Node safely. This avoids nullptr dereference crashes in rare cases
+    // (e.g., memory corruption or unexpected allocation failure).
+    static cocos2d::Node* safeCreateNode() {
+        auto n = cocos2d::Node::create();
+        if (n) return n;
+
+        // Fallback path: manually allocate and init.
+        cocos2d::Node* raw = new (std::nothrow) cocos2d::Node();
+        if (raw && raw->init()) {
+            raw->autorelease();
+            return raw;
+        }
+        CC_SAFE_DELETE(raw);
+        return nullptr;
+    }
+}
+
 #endif
 using namespace cocos2d;
 
@@ -61,6 +91,10 @@ bool MainScene::init()
     _occupied = DrawNode::create();
     _world->addChild(_occupied, 2);
     _world->addChild(_hint, 2);
+
+    // Layer for stand troop visuals (spawned when troops are trained)
+    _standTroopLayer = Node::create();
+    _world->addChild(_standTroopLayer, 4);
     _occupy.assign(_rows, std::vector<int>(_cols, 0));
     _buildingScaleById.assign(10, 1.0f);
     _buildingOffsetById.assign(10, Vec2::ZERO);
@@ -202,7 +236,7 @@ bool MainScene::init()
         };
     _eventDispatcher->addEventListenerWithSceneGraphPriority(listener, this);
 
-    //建筑大小接口
+    //
     setBuildingScale(0.33f);
 
     setBuildingScaleForId(1, 0.4f);
@@ -226,6 +260,13 @@ bool MainScene::init()
     setBuildingOffsetForId(10, Vec2(0, 4 / 3));
     loadFromCurrentSaveOrCreate();
 
+    for (size_t i = 0; i < _buildings.size(); ++i) {
+        auto& pb = _buildings[i];
+        if (!pb.data) continue;
+        if (auto barracks = dynamic_cast<Barracks*>(pb.data.get())) {
+            barracks->applyCap();
+        }
+    }
     return true;
 }
 
@@ -535,6 +576,39 @@ void MainScene::update(float dt)
             gm->manageCollectPrompt(_world, pb.sprite);
         }
     }
+
+    // If training UI is open, refresh progress & content when state changes
+     //
+    if (_trainMask && _trainCampIndex >= 0 && _trainCampIndex < (int)_buildings.size()) {
+        auto& pb = _buildings[_trainCampIndex];
+        if (pb.data) {
+            if (auto tc = dynamic_cast<TrainingCamp*>(pb.data.get())) {
+                //
+                int sig = 0;
+                const auto& ready = tc->getAllReadyCounts();
+                for (const auto& kv : ready) {
+                    sig = sig * 31 + kv.first;
+                    sig = sig * 31 + kv.second;
+                }
+
+                //
+                if (sig != _trainLastSig) {
+                    _trainLastSig = sig;
+                    refreshTrainingCampUI();
+                }
+
+                if (_trainCapLabel) 
+                {
+                    int totalCap = ResourceManager::getPopulationCap();
+                    int usedHousing = tc->getUsedHousing(); 
+                    char buf[64];
+                    snprintf(buf, sizeof(buf), "%d / %d", usedHousing, totalCap);
+                    _trainCapLabel->setString(buf);
+                }
+            }
+        }
+    }
+
     _autosaveTimer += dt;
     if (_autosaveTimer >= 2.0f)
     {
@@ -596,11 +670,36 @@ void MainScene::openUpgradeWindowForIndex(int idx)
             if (ok) {
                 pb.data->level = curLv2 + 1;
                 BuildingFactory::applyStats(pb.data.get(), pb.id, pb.data->level);
+
+                // Sync the on-sprite "level" label immediately after upgrade.
+                // The label is created in Building::createSprite() with a fixed tag.
+                if (pb.sprite) {
+                    static const int kLevelLabelTag = 20251225;
+                    auto lvl = dynamic_cast<cocos2d::Label*>(pb.sprite->getChildByTag(kLevelLabelTag));
+                    if (lvl) {
+                        lvl->setString(std::string("level") + std::to_string(pb.data->level));
+                    }
+                }
                 _saveDirty = true;
             }
         },
         []() {}
     );
+    // Add "Train" button for Training Camp (id == 8)
+    if (b.id == 8) {
+        auto trainLabel = Label::createWithSystemFont("Train", "Arial", 22);
+        trainLabel->setColor(Color3B::BLACK);
+        auto trainItem = MenuItemLabel::create(trainLabel, [this, idx, modal](Ref*) {
+            if (modal) modal->removeFromParent();
+            openTrainingCampPicker(idx);
+        });
+        // place above the bottom buttons
+        trainItem->setPosition(Vec2(modal->getContentSize().width * 0.5f, 80.f));
+        auto trainMenu = Menu::create(trainItem, nullptr);
+        trainMenu->setPosition(Vec2::ZERO);
+        modal->addChild(trainMenu, 4);
+    }
+
     this->addChild(modal, 100);
 }
 
@@ -1016,6 +1115,10 @@ void MainScene::loadFromCurrentSaveOrCreate()
     ResourceManager::setElixir(data.elixir);
     ResourceManager::setPopulation(data.population);
 
+
+restoreStandTroopsFromSave(data);
+applyStandTroopsToTrainingCamps();
+
     _saveDirty = false;
     _autosaveTimer = 0.0f;
 }
@@ -1041,6 +1144,18 @@ void MainScene::saveToCurrentSlot(bool force)
     data.elixir = ResourceManager::getElixir();
     data.population = ResourceManager::getPopulation();
     data.timeScale = _timeScale;
+
+
+data.trainedTroops.clear();
+data.trainedTroops.reserve(_standTroops.size());
+for (const auto& t : _standTroops)
+{
+    SaveTrainedTroop st;
+    st.type = t.type;
+    st.r = t.r;
+    st.c = t.c;
+    data.trainedTroops.push_back(st);
+}
 
     for (const auto& b : _buildings)
     {
@@ -1093,6 +1208,9 @@ void MainScene::placeBuildingLoaded(int r, int c, const SaveBuilding& info)
     b->level = std::max(1, info.level);
     if (info.hp > 0) b->hp = std::min(info.hp, b->hpMax);
     b->stored = info.stored;
+    if (auto barracks = dynamic_cast<Barracks*>(b.get())) {
+        barracks->applyCap();
+    }
     auto s = b->createSprite();
     Vec2 center(_anchor.x + (c - r) * (_tileW * 0.5f), _anchor.y - (c + r) * (_tileH * 0.5f));
     int idx = std::max(1, std::min(9, info.id));
@@ -1162,8 +1280,8 @@ void MainScene::openAttackTargetPicker()
     _attackScroll->setDirection(ui::ScrollView::Direction::VERTICAL);
     _attackScroll->setBounceEnabled(true);
     _attackScroll->setContentSize(Size(panelW - 40, panelH - 140));
-    // NOTE: ui::ScrollView 默认忽略 anchorPoint（用左下角做定位）。
-    // 这里直接用左下角定位，避免出现“偏到右边”的问题。
+    //
+    //
     _attackScroll->setAnchorPoint(Vec2::ZERO);
     _attackScroll->ignoreAnchorPointForPosition(true);
     _attackScroll->setPosition(Vec2(20, 60));
@@ -1213,6 +1331,8 @@ void MainScene::openAttackTargetPicker()
             auto attackLabel = Label::createWithSystemFont("Attack", "Arial", 26);
             auto attackItem = MenuItemLabel::create(attackLabel, [this, meta](Ref*) {
                 SaveSystem::setBattleTargetSlot(meta.slot);
+                // Pass current READY troops to BattleScene for the bottom troop bar UI.
+                SaveSystem::setBattleReadyTroops(collectAllReadyTroops());
                 closeAttackTargetPicker();
                 auto scene = BattleScene::createScene();
                 Director::getInstance()->replaceScene(TransitionFade::create(0.3f, scene));
@@ -1270,4 +1390,487 @@ void MainScene::closeAttackTargetPicker()
 _attackMask->removeFromParent();
         _attackMask = nullptr;
     }
+}
+
+
+// =========================
+// Training Camp UI (Army Camp)
+// =========================
+void MainScene::openTrainingCampPicker(int buildingIndex)
+{
+    if (_trainMask) return;
+    if (buildingIndex < 0 || buildingIndex >= (int)_buildings.size()) return;
+
+    auto& pb = _buildings[buildingIndex];
+    if (!pb.data) return;
+    auto tc = dynamic_cast<TrainingCamp*>(pb.data.get());
+    if (!tc) return;
+
+    _trainCampIndex = buildingIndex;
+    _trainLastSig = 0;
+
+    auto visibleSize = Director::getInstance()->getVisibleSize();
+    auto origin = Director::getInstance()->getVisibleOrigin();
+
+    // Modal mask
+    _trainMask = LayerColor::create(Color4B(0, 0, 0, 180));
+    this->addChild(_trainMask, 260);
+
+    auto maskListener = EventListenerTouchOneByOne::create();
+    maskListener->setSwallowTouches(true);
+    maskListener->onTouchBegan = [](Touch*, Event*) { return true; };
+    _eventDispatcher->addEventListenerWithSceneGraphPriority(maskListener, _trainMask);
+
+    // Panel
+    float panelW = visibleSize.width * 0.90f;
+    float panelH = visibleSize.height * 0.85f;
+    auto panel = LayerColor::create(Color4B(245, 245, 245, 255), panelW, panelH);
+    panel->setPosition(origin + Vec2((visibleSize.width - panelW) * 0.5f, (visibleSize.height - panelH) * 0.5f));
+    _trainMask->addChild(panel, 1);
+    _trainPanel = panel;
+
+    // Title
+    auto title = Label::createWithSystemFont("Training", "Arial", 26);
+    title->setColor(Color3B::BLACK);
+    title->setPosition(Vec2(panelW * 0.5f, panelH - 30.f));
+    panel->addChild(title, 2);
+
+    // Close button
+    auto closeLbl = Label::createWithSystemFont("X", "Arial", 26);
+    closeLbl->setColor(Color3B::BLACK);
+    auto closeItem = MenuItemLabel::create(closeLbl, [this](Ref*) { closeTrainingCampPicker(); });
+    closeItem->setPosition(Vec2(panelW - 22.f, panelH - 28.f));
+    auto closeMenu = Menu::create(closeItem, nullptr);
+    closeMenu->setPosition(Vec2::ZERO);
+    panel->addChild(closeMenu, 3);
+
+    //
+    _trainCapLabel = Label::createWithSystemFont("", "Arial", 18);
+    _trainCapLabel->setColor(Color3B::BLACK);
+    _trainCapLabel->setAnchorPoint(Vec2(1, 0.5));
+    _trainCapLabel->setPosition(Vec2(panelW - 20.f, panelH - 70.f));
+    panel->addChild(_trainCapLabel, 2);
+
+    //
+    auto rTitle = Label::createWithSystemFont("Ready", "Arial", 18);
+    rTitle->setColor(Color3B::BLACK);
+    rTitle->setAnchorPoint(Vec2(0, 0.5));
+    rTitle->setPosition(Vec2(20.f, panelH - 100.f));
+    panel->addChild(rTitle, 2);
+
+    
+    float readyIconH = 80.0f;
+    {
+        auto probe = Sprite::create(TrainingCamp::getTroopIcon(TrainingCamp::TROOP_BARBARIAN));
+        if (probe) readyIconH = probe->getContentSize().height;
+    }
+//
+    _trainReadyRow = safeCreateNode();
+
+    if (_trainReadyRow) {
+        _trainReadyRow->setPosition(Vec2(rTitle->getPositionX() + rTitle->getContentSize().width + 15.0f, rTitle->getPositionY() - readyIconH));
+        panel->addChild(_trainReadyRow, 2);
+    } else {
+        CCLOG("[TrainingUI] Failed to create _trainReadyRow");
+    }
+
+
+    //
+    _trainSelectRow = safeCreateNode();
+    if (_trainSelectRow) {
+        _trainSelectRow->setPosition(Vec2(20.f, 25.f));
+        panel->addChild(_trainSelectRow, 2);
+    } else {
+        CCLOG("[TrainingUI] Failed to create _trainSelectRow");
+    }
+
+
+    refreshTrainingCampUI();
+}
+
+void MainScene::closeTrainingCampPicker()
+{
+    if (_trainMask) {
+        _trainPanel = nullptr;
+        _trainReadyRow = nullptr;
+        _trainSelectRow = nullptr;
+        _trainCapLabel = nullptr;
+        _trainCampIndex = -1;
+        _trainLastSig = 0;
+
+        _trainMask->removeFromParent();
+        _trainMask = nullptr;
+    }
+}
+
+void MainScene::showTrainingToast(const std::string& msg)
+{
+    if (!_trainPanel) return;
+
+    auto size = _trainPanel->getContentSize();
+
+    auto label = Label::createWithSystemFont(msg, "Arial", 22);
+    label->setColor(Color3B(200, 30, 30));
+    label->setPosition(Vec2(size.width * 0.5f, size.height * 0.5f));
+    _trainPanel->addChild(label, 10);
+
+    label->runAction(Sequence::create(
+        DelayTime::create(2.0f),
+        FadeOut::create(0.25f),
+        RemoveSelf::create(),
+        nullptr
+    ));
+}
+
+void MainScene::refreshTrainingCampUI()
+{
+    if (!_trainMask || _trainCampIndex < 0 || _trainCampIndex >= (int)_buildings.size()) return;
+    auto& pb = _buildings[_trainCampIndex];
+    if (!pb.data) return;
+    auto tc = dynamic_cast<TrainingCamp*>(pb.data.get());
+    if (!tc) return;
+
+    // Clear existing content
+    if (_trainReadyRow) _trainReadyRow->removeAllChildren();
+    if (_trainSelectRow) _trainSelectRow->removeAllChildren();
+
+    // Helper to create icon node with count + minus button
+    auto createReadyIcon = [this](TrainingCamp::TroopType t, int count)->Node* {
+        auto node = safeCreateNode();
+        if (!node) return nullptr;
+
+        auto sp = Sprite::create(TrainingCamp::getTroopIcon(t));
+        if (!sp) {
+            sp = Sprite::create();
+        }
+        if (!sp) return nullptr;
+        sp->setAnchorPoint(Vec2(0, 0));
+        sp->setPosition(Vec2(0, 0));
+        float scale = 0.70f;
+        sp->setScale(scale);
+        node->addChild(sp, 1);
+
+        Size iconSize = sp->getContentSize() * scale;
+
+        // Count label (top-left inside)
+        char buf[32];
+        snprintf(buf, sizeof(buf), "x%d", count);
+        auto cntLbl = Label::createWithSystemFont(buf, "Arial", 18);
+        cntLbl->setColor(Color3B::BLACK);
+        cntLbl->setAnchorPoint(Vec2(0, 1));
+        cntLbl->setPosition(Vec2(4.f, iconSize.height - 4.f));
+        node->addChild(cntLbl, 2);
+
+        // Minus button (top-right inside)
+        auto minusLbl = Label::createWithSystemFont("-", "Arial", 22);
+        minusLbl->setColor(Color3B(40, 40, 40));
+        auto minusItem = MenuItemLabel::create(minusLbl, [this, t](Ref*) {
+            if (_trainCampIndex < 0 || _trainCampIndex >= (int)_buildings.size()) return;
+            auto& pb2 = _buildings[_trainCampIndex];
+            if (!pb2.data) return;
+            auto tc2 = dynamic_cast<TrainingCamp*>(pb2.data.get());
+            if (!tc2) return;
+
+            // Try to remove ready troop
+            if (tc2->tryRemoveReadyTroop(t)) {
+                _trainLastSig = 0;
+                removeStandTroopOfType((int)t);
+                _saveDirty = true;
+                refreshTrainingCampUI();
+            }
+});
+        minusItem->setAnchorPoint(Vec2(1, 1));
+        minusItem->setPosition(Vec2(iconSize.width - 4.f, iconSize.height - 4.f));
+        auto menu = Menu::create(minusItem, nullptr);
+        menu->setPosition(Vec2(0, 0));
+        node->addChild(menu, 3);
+
+        node->setContentSize(iconSize);
+        return node;
+        };
+
+    // Show ready troops
+    float x = 0.f;
+    float gap = 10.f;
+    if (_trainReadyRow) {
+        // Loop through all troop types
+        for (int key = 1; key <= 4; ++key) {
+            auto t = (TrainingCamp::TroopType)key;
+            int cnt = tc->getReadyCount(t);
+            if (cnt <= 0) continue;
+
+            auto icon = createReadyIcon(t, cnt);
+            if (!icon) continue;
+            if (icon) icon->setPosition(Vec2(x, 0));
+            if (_trainReadyRow) _trainReadyRow->addChild(icon, 1);
+            x += icon->getContentSize().width + gap;
+        }
+    }
+
+    // Show trainable troop buttons (unlocked by camp level)
+    if (_trainSelectRow) {
+        float bx = 0.f;
+        for (int key = 1; key <= 4; ++key) {
+            auto t = (TrainingCamp::TroopType)key;
+            if (!tc->isUnlocked(t)) continue;
+
+            auto btn = ui::Button::create(TrainingCamp::getTroopIcon(t));
+            btn->setAnchorPoint(Vec2(0, 0));
+            btn->setPosition(Vec2(bx, 0));
+            btn->setScale(0.70f);
+            btn->addClickEventListener([this, t](Ref*) {
+                if (_trainCampIndex < 0 || _trainCampIndex >= (int)_buildings.size()) return;
+                auto& pb2 = _buildings[_trainCampIndex];
+                if (!pb2.data) return;
+                auto tc2 = dynamic_cast<TrainingCamp*>(pb2.data.get());
+                if (!tc2) return;
+
+                // Try to add ready troop
+                if (tc2->tryAddReadyTroop(t)) {
+                    _trainLastSig = 0;
+                    spawnStandTroop((int)t);
+                    _saveDirty = true;
+                    refreshTrainingCampUI();
+                }
+                else {
+                    showTrainingToast("Cannot add troop: capacity full or not unlocked.");
+                }
+                });
+            _trainSelectRow->addChild(btn, 1);
+
+            float w = btn->getContentSize().width * btn->getScale();
+            bx += w + 10.f;
+        }
+    }
+
+    // Update capacity label
+    if (_trainCapLabel) {
+        int totalCap = ResourceManager::getPopulationCap();
+        int usedHousing = tc->getUsedHousing();
+        char buf[64];
+        snprintf(buf, sizeof(buf), "%d / %d", usedHousing, totalCap);
+        _trainCapLabel->setString(buf);
+    }
+
+    // Update signature
+    int sig = 0;
+    const auto& ready = tc->getAllReadyCounts();
+    for (const auto& kv : ready) {
+        sig = sig * 31 + kv.first;
+        sig = sig * 31 + kv.second;
+    }
+    _trainLastSig = sig;
+}
+
+std::unordered_map<int, int> MainScene::collectAllReadyTroops() const
+{
+    std::unordered_map<int, int> out;
+    for (const auto& pb : _buildings)
+    {
+        if (!pb.data) continue;
+        auto tc = dynamic_cast<TrainingCamp*>(pb.data.get());
+        if (!tc) continue;
+
+        const auto& ready = tc->getAllReadyCounts();
+        for (const auto& kv : ready)
+        {
+            out[kv.first] += kv.second;
+        }
+    }
+    return out;
+}
+
+
+void MainScene::removeStandTroopOfType(int troopType)
+{
+    for (int i = (int)_standTroops.size() - 1; i >= 0; --i)
+    {
+        if (_standTroops[i].type != troopType) continue;
+        if (_standTroops[i].sprite) _standTroops[i].sprite->removeFromParent();
+        _standTroops.erase(_standTroops.begin() + i);
+        return;
+    }
+}
+
+void MainScene::restoreStandTroopsFromSave(const SaveData& data)
+{
+    if (_standTroopLayer) _standTroopLayer->removeAllChildren();
+    _standTroops.clear();
+
+    for (const auto& t : data.trainedTroops)
+    {
+        // Spawn at saved cell if possible; otherwise fallback to random spawn.
+        int r = t.r;
+        int c = t.c;
+        bool occupied = false;
+        for (const auto& ex : _standTroops)
+        {
+            if (ex.r == r && ex.c == c) { occupied = true; break; }
+        }
+        if (occupied || r < 0 || r >= _rows || c < 0 || c >= _cols)
+        {
+            spawnStandTroop(t.type);
+            continue;
+        }
+
+        auto sp = createStandTroopSprite(t.type);
+        if (!sp) continue;
+
+        Vec2 center(_anchor.x + (c - r) * (_tileW * 0.5f),
+                    _anchor.y - (c + r) * (_tileH * 0.5f));
+        float jx = randomRealSafe(-_tileW * 0.15f, _tileW * 0.15f);
+        float jy = randomRealSafe(-_tileH * 0.10f, _tileH * 0.10f);
+        Vec2 pos = center + Vec2(jx, _tileH * 0.10f + jy);
+
+        float desiredW = _tileW * 0.60f;
+        float s = desiredW / std::max(1.0f, sp->getContentSize().width);
+        sp->setScale(s);
+        sp->setPosition(pos);
+
+        int z = 5 + r + c;
+        _standTroopLayer->addChild(sp, z);
+
+        StandTroopInfo info;
+        info.type = t.type;
+        info.r = r;
+        info.c = c;
+        info.sprite = sp;
+        _standTroops.push_back(info);
+    }
+}
+
+void MainScene::applyStandTroopsToTrainingCamps()
+{
+    std::unordered_map<int, int> counts;
+    for (const auto& t : _standTroops) counts[t.type] += 1;
+
+    bool applied = false;
+    for (auto& pb : _buildings)
+    {
+        if (!pb.data) continue;
+        auto tc = dynamic_cast<TrainingCamp*>(pb.data.get());
+        if (!tc) continue;
+
+        tc->clearAllReadyCounts();
+
+        if (!applied)
+        {
+            for (const auto& kv : counts)
+            {
+                tc->setReadyCount((TrainingCamp::TroopType)kv.first, kv.second);
+            }
+            applied = true;
+        }
+    }
+}
+
+cocos2d::Sprite* MainScene::createStandTroopSprite(int troopType) const
+{
+    std::string path;
+    if (troopType == (int)TrainingCamp::TROOP_BARBARIAN) path = "barbarian/barbarian_stand.png";
+    else if (troopType == (int)TrainingCamp::TROOP_ARCHER) path = "archor/archor_stand.png";
+    else if (troopType == (int)TrainingCamp::TROOP_GIANT) path = "giant/giant_stand.png";
+    else if (troopType == (int)TrainingCamp::TROOP_WALLBREAKER) path = "wall_breaker/wall_breaker_stand.png";
+    else path = "";
+
+    if (!path.empty())
+    {
+        if (auto sp = Sprite::create(path))
+        {
+            sp->setAnchorPoint(Vec2(0.5f, 0.0f));
+            return sp;
+        }
+    }
+
+    // Fallback: use the same icon as training UI if stand sprite is missing.
+    auto iconPath = TrainingCamp::getTroopIcon((TrainingCamp::TroopType)troopType);
+    if (auto sp = Sprite::create(iconPath))
+    {
+        sp->setAnchorPoint(Vec2(0.5f, 0.0f));
+        return sp;
+    }
+    return nullptr;
+}
+
+void MainScene::spawnStandTroop(int troopType)
+{
+    if (!_world || !_standTroopLayer) return;
+
+    // Find all Barracks buildings (id == 7).
+    std::vector<int> barracksIndices;
+    for (int i = 0; i < (int)_buildings.size(); ++i)
+    {
+        if (_buildings[i].id == 7) barracksIndices.push_back(i);
+    }
+
+    if (barracksIndices.empty())
+    {
+        showTrainingToast("No Barracks found.");
+        return;
+    }
+
+    // Try to pick a free grid cell near a random Barracks.
+    int chosenR = 0;
+    int chosenC = 0;
+    bool found = false;
+
+    for (int attempt = 0; attempt < 40 && !found; ++attempt)
+    {
+        int bi = barracksIndices[cocos2d::RandomHelper::random_int(0, (int)barracksIndices.size() - 1)];
+        int rr = _buildings[bi].r;
+        int cc = _buildings[bi].c;
+
+        int r = rr + cocos2d::RandomHelper::random_int(-2, 2);
+        int c = cc + cocos2d::RandomHelper::random_int(-2, 2);
+
+        if (r < 0 || r >= _rows || c < 0 || c >= _cols) continue;
+
+        bool occupied = false;
+        for (const auto& t : _standTroops)
+        {
+            if (t.r == r && t.c == c) { occupied = true; break; }
+        }
+        if (occupied) continue;
+
+        chosenR = r;
+        chosenC = c;
+        found = true;
+    }
+
+    if (!found)
+    {
+        // Fallback: allow stacking in the Barracks center cell.
+        int bi = barracksIndices.front();
+        chosenR = _buildings[bi].r;
+        chosenC = _buildings[bi].c;
+    }
+
+    auto sp = createStandTroopSprite(troopType);
+    if (!sp) return;
+
+    // Compute isometric world position for the chosen cell.
+    Vec2 center(_anchor.x + (chosenC - chosenR) * (_tileW * 0.5f),
+                _anchor.y - (chosenC + chosenR) * (_tileH * 0.5f));
+
+    // Add slight jitter so troops do not perfectly overlap.
+    float jx = randomRealSafe(-_tileW * 0.15f, _tileW * 0.15f);
+    float jy = randomRealSafe(-_tileH * 0.10f, _tileH * 0.10f);
+    Vec2 pos = center + Vec2(jx, _tileH * 0.10f + jy);
+
+    // Scale to fit roughly one tile.
+    float desiredW = _tileW * 0.60f;
+    float s = desiredW / std::max(1.0f, sp->getContentSize().width);
+    sp->setScale(s);
+    sp->setPosition(pos);
+
+    // Keep an ordering so troops draw naturally in iso view.
+    int z = 5 + chosenR + chosenC;
+    _standTroopLayer->addChild(sp, z);
+
+    StandTroopInfo info;
+    info.type = troopType;
+    info.r = chosenR;
+    info.c = chosenC;
+    info.sprite = sp;
+    _standTroops.push_back(info);
 }

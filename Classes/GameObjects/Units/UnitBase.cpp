@@ -2,6 +2,8 @@
 
 #include "GameObjects/Units/Barbarian.h"
 #include "GameObjects/Units/Archer.h"
+#include "GameObjects/Units/Giant.h"
+#include "GameObjects/Units/wall_breaker.h"
 
 using namespace cocos2d;
 

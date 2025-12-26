@@ -13,17 +13,17 @@ namespace BuildingFactory {
     std::unique_ptr<Building> create(int id, int level) {
         std::unique_ptr<Building> b;
         switch (id) {
-        case 1: b.reset(new ArrowTower()); break;
-        case 2: b.reset(new Cannon()); break;
-        case 3: b.reset(new ElixirCollector()); break;
-        case 4: b.reset(new ElixirStorage()); break;
-        case 5: b.reset(new GoldMine()); break;
-        case 6: b.reset(new GoldStorage()); break;
-        case 7: b.reset(new Barracks()); break;
-        case 8: b.reset(new TrainingCamp()); break;
-        case 9: b.reset(new TownHall()); break;
-        case 10: b.reset(new Wall()); break;
-        default: b.reset(new Building()); break;
+            case 1: b.reset(new ArrowTower()); break;
+            case 2: b.reset(new Cannon()); break;
+            case 3: b.reset(new ElixirCollector()); break;
+            case 4: b.reset(new ElixirStorage()); break;
+            case 5: b.reset(new GoldMine()); break;
+            case 6: b.reset(new GoldStorage()); break;
+            case 7: b.reset(new Barracks()); break;
+            case 8: b.reset(new TrainingCamp()); break;
+            case 9: b.reset(new TownHall()); break;
+            case 10: b.reset(new Wall()); break;
+            default: b.reset(new Building()); break;
         }
         b->hpMax = 100;
         b->hp = 100;
@@ -67,7 +67,10 @@ namespace BuildingFactory {
         }
         else if (id == 7) {
             auto bk = dynamic_cast<Barracks*>(b);
-            if (bk) { bk->setupStats(level); bk->applyCap(); }
+            if (bk) {
+                bk->setupStats(level);
+                bk->applyCap(); // 立即应用兵营容量
+            }
         }
         else if (id == 8) {
             auto tc = dynamic_cast<TrainingCamp*>(b);

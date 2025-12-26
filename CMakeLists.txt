@@ -60,6 +60,7 @@ list(APPEND GAME_SOURCE
      Classes/GameObjects/Units/Archer.cpp
      Classes/GameObjects/Units/Barbarian.cpp
      Classes/GameObjects/Units/Giant.cpp
+     Classes/GameObjects/Units/wall_breaker.cpp
      Classes/GameObjects/Units/UnitBase.cpp
      Classes/Managers/AnimationManager.cpp
      Classes/Managers/ConfigManager.cpp
@@ -101,6 +102,7 @@ list(APPEND GAME_HEADER
      Classes/GameObjects/Units/Archer.h
      Classes/GameObjects/Units/Barbarian.h
      Classes/GameObjects/Units/Giant.h
+     Classes/GameObjects/Units/wall_breaker.h
      Classes/GameObjects/Units/UnitBase.h
      Classes/Managers/AnimationManager.h
      Classes/Managers/ConfigManager.h

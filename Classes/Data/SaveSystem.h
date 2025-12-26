@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <string>
 #include <vector>
+#include <unordered_map>
 
 struct SaveMeta
 {
@@ -24,6 +25,14 @@ struct SaveBuilding
     float stored = 0.0f;
 };
 
+
+struct SaveTrainedTroop
+{
+    int type = 0; // TrainingCamp::TroopType (1..4)
+    int r = 0;    // grid row (MainScene cell)
+    int c = 0;    // grid col (MainScene cell)
+};
+
 struct SaveData
 {
     int slot = 0;
@@ -33,6 +42,8 @@ struct SaveData
     int population = 0;
     float timeScale = 1.0f;
     std::vector<SaveBuilding> buildings;
+    std::vector<SaveTrainedTroop> trainedTroops;
+
 };
 
 class SaveSystem
@@ -43,6 +54,10 @@ public:
 
     static void setBattleTargetSlot(int slot);
     static int getBattleTargetSlot();
+
+    // READY troops passed from MainScene to BattleScene.
+    static void setBattleReadyTroops(const std::unordered_map<int, int>& troops);
+    static const std::unordered_map<int, int>& getBattleReadyTroops();
 
     static std::string getSaveDir();
     static std::string getSavePath(int slot);
@@ -58,4 +73,5 @@ private:
     static constexpr int kMaxSlots = 20;
     static int s_currentSlot;
     static int s_battleTargetSlot;
+    static std::unordered_map<int, int> s_battleReadyTroops;
 };
