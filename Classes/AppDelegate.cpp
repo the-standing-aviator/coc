@@ -14,7 +14,7 @@ AppDelegate::AppDelegate() {}
 AppDelegate::~AppDelegate() {}
 
 void AppDelegate::initGLContextAttrs() {
-    GLContextAttrs attrs = {8, 8, 8, 8, 24, 8};
+    GLContextAttrs attrs = { 8, 8, 8, 8, 24, 8 };
     GLView::setGLContextAttrs(attrs);
 }
 

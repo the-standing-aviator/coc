@@ -33,7 +33,7 @@ public:
         costElixir = 0;
         trainingTimeSec = 0;
 
-        image = "troops/giant.png"; // Optional: change to your actual resource path
+        image = "giant/giant_stand.png"; // Optional: change to your actual resource path
     }
 
     virtual ~Giant() = default;

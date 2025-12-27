@@ -53,12 +53,12 @@ bool MenuScene::init()
     auto newLabel = Label::createWithSystemFont("Create New Save", "Arial", 54);
     auto newItem = MenuItemLabel::create(newLabel, [this](Ref*) {
         this->createNewSaveAndEnter();
-    });
+        });
 
     auto loadLabel = Label::createWithSystemFont("Load Existing Save", "Arial", 54);
     auto loadItem = MenuItemLabel::create(loadLabel, [this](Ref*) {
         this->openSaveSelector();
-    });
+        });
 
     auto exitLabel = Label::createWithSystemFont("Exit Game", "Arial", 46);
     auto exitItem = MenuItemLabel::create(exitLabel, [](Ref*) {
@@ -67,7 +67,7 @@ bool MenuScene::init()
 #else
         Director::getInstance()->end();
 #endif
-    });
+        });
 
     newItem->setPosition(origin + Vec2(visibleSize.width / 2, visibleSize.height * 0.52f));
     loadItem->setPosition(origin + Vec2(visibleSize.width / 2, visibleSize.height * 0.40f));
@@ -77,7 +77,7 @@ bool MenuScene::init()
     menu->setPosition(Vec2::ZERO);
     this->addChild(menu, 2);
     // Save selector overlay will be created on demand
-return true;
+    return true;
 }
 
 void MenuScene::createNewSaveAndEnter()
@@ -131,7 +131,7 @@ void MenuScene::closeSaveSelector()
             _saveMouseListener = nullptr;
         }
         _savePanel = nullptr;
-_saveMask->removeFromParent();
+        _saveMask->removeFromParent();
         _saveMask = nullptr;
         _saveScroll = nullptr;
         _saveContent = nullptr;
@@ -154,12 +154,12 @@ void MenuScene::buildSaveUI()
 
     auto panel = LayerColor::create(Color4B(240, 240, 240, 240), panelW, panelH);
     panel->setPosition(origin.x + visibleSize.width / 2 - panelW / 2,
-                       origin.y + visibleSize.height / 2 - panelH / 2);
+        origin.y + visibleSize.height / 2 - panelH / 2);
     _saveMask->addChild(panel);
 
-    
+
     _savePanel = panel;
-// Touch listener: only swallow touches OUTSIDE panel, so buttons inside panel still work.
+    // Touch listener: only swallow touches OUTSIDE panel, so buttons inside panel still work.
     auto maskListener = EventListenerTouchOneByOne::create();
     maskListener->setSwallowTouches(true);
     maskListener->onTouchBegan = [panel](Touch* t, Event*) {
@@ -168,11 +168,11 @@ void MenuScene::buildSaveUI()
         Rect pr(0, 0, panel->getContentSize().width, panel->getContentSize().height);
         // If touch inside panel -> do NOT swallow (return false), allow panel buttons to receive touches.
         return !pr.containsPoint(local);
-    };
+        };
     maskListener->onTouchEnded = [this](Touch*, Event*) {
         // Touch ended outside panel -> close overlay
         this->closeSaveSelector();
-    };
+        };
     _eventDispatcher->addEventListenerWithSceneGraphPriority(maskListener, _saveMask);
 
     // Title
@@ -186,7 +186,7 @@ void MenuScene::buildSaveUI()
     closeLabel->setColor(Color3B::BLACK);
     auto closeItem = MenuItemLabel::create(closeLabel, [this](Ref*) {
         this->closeSaveSelector();
-    });
+        });
     closeItem->setPosition(Vec2(panelW - 40, panelH - 45));
     auto closeMenu = Menu::create(closeItem, nullptr);
     closeMenu->setPosition(Vec2::ZERO);
@@ -196,7 +196,7 @@ void MenuScene::buildSaveUI()
     _saveScroll = ui::ScrollView::create();
     _saveScroll->setDirection(ui::ScrollView::Direction::VERTICAL);
     _saveScroll->setBounceEnabled(true);
-    _saveScroll->setContentSize(Size(panelW*2-100 , panelH - 120));
+    _saveScroll->setContentSize(Size(panelW * 2 - 100, panelH - 120));
 
     _saveScroll->setAnchorPoint(Vec2::ZERO);
     _saveScroll->ignoreAnchorPointForPosition(false);
@@ -213,29 +213,29 @@ void MenuScene::buildSaveUI()
     {
         _saveMouseListener = EventListenerMouse::create();
         _saveMouseListener->onMouseScroll = [this](Event* e)
-        {
-            auto m = static_cast<EventMouse*>(e);
-            if (!_saveMask || !_saveMask->isVisible() || !_saveScroll || !_savePanel) return;
+            {
+                auto m = static_cast<EventMouse*>(e);
+                if (!_saveMask || !_saveMask->isVisible() || !_saveScroll || !_savePanel) return;
 
-            // Only scroll when cursor is inside the panel
-            Vec2 glPos = Director::getInstance()->convertToGL(Vec2(m->getCursorX(), m->getCursorY()));
-            Vec2 local = _savePanel->convertToNodeSpace(glPos);
-            Rect r(0, 0, _savePanel->getContentSize().width, _savePanel->getContentSize().height);
-            if (!r.containsPoint(local)) return;
+                // Only scroll when cursor is inside the panel
+                Vec2 glPos = Director::getInstance()->convertToGL(Vec2(m->getCursorX(), m->getCursorY()));
+                Vec2 local = _savePanel->convertToNodeSpace(glPos);
+                Rect r(0, 0, _savePanel->getContentSize().width, _savePanel->getContentSize().height);
+                if (!r.containsPoint(local)) return;
 
-            float dy = m->getScrollY() * 60.0f; // wheel speed
-            Vec2 pos = _saveScroll->getInnerContainerPosition();
-            pos.y += dy;
+                float dy = m->getScrollY() * 60.0f; // wheel speed
+                Vec2 pos = _saveScroll->getInnerContainerPosition();
+                pos.y += dy;
 
-            float minY = _saveScroll->getContentSize().height - _saveScroll->getInnerContainerSize().height;
-            if (minY > 0) minY = 0;
+                float minY = _saveScroll->getContentSize().height - _saveScroll->getInnerContainerSize().height;
+                if (minY > 0) minY = 0;
 
-            if (pos.y > 0) pos.y = 0;
-            if (pos.y < minY) pos.y = minY;
+                if (pos.y > 0) pos.y = 0;
+                if (pos.y < minY) pos.y = minY;
 
-            _saveScroll->setInnerContainerPosition(pos);
-            e->stopPropagation();
-        };
+                _saveScroll->setInnerContainerPosition(pos);
+                e->stopPropagation();
+            };
         _eventDispatcher->addEventListenerWithSceneGraphPriority(_saveMouseListener, _saveMask);
     }
 }
@@ -264,8 +264,8 @@ void MenuScene::refreshSaveList()
             "Arial", 30
         );
         msg->setColor(Color3B::BLACK);
-        msg->setPosition(Vec2(_saveScroll->getContentSize().width * 0.5f+400 ,
-                              _saveScroll->getContentSize().height * 0.5f+100));
+        msg->setPosition(Vec2(_saveScroll->getContentSize().width * 0.5f + 400,
+            _saveScroll->getContentSize().height * 0.5f + 100));
         _saveContent->addChild(msg);
         return;
     }
@@ -281,8 +281,8 @@ void MenuScene::refreshSaveList()
         float y = innerH - rowH * (i + 0.5f);
 
         auto rowBg = LayerColor::create(Color4B(220, 220, 220, 255),
-                                        _saveScroll->getContentSize().width,
-                                        rowH - 6);
+            _saveScroll->getContentSize().width,
+            rowH - 6);
         rowBg->setAnchorPoint(Vec2(0.5f, 0.5f));
         rowBg->setPosition(Vec2(_saveScroll->getContentSize().width * 0.5f, y));
         _saveContent->addChild(rowBg);
@@ -303,7 +303,7 @@ void MenuScene::refreshSaveList()
             Director::getInstance()->replaceScene(
                 TransitionFade::create(0.25f, MainScene::createScene())
             );
-        });
+            });
 
         // Delete
         auto delLabel = Label::createWithSystemFont("Delete", "Arial", 28);
@@ -311,7 +311,7 @@ void MenuScene::refreshSaveList()
         auto delItem = MenuItemLabel::create(delLabel, [this, meta](Ref*) {
             SaveSystem::remove(meta.slot);
             this->refreshSaveList();
-        });
+            });
 
         enterItem->setPosition(Vec2(rowBg->getContentSize().width - 970, rowH * 0.5f));
         delItem->setPosition(Vec2(rowBg->getContentSize().width - 870, rowH * 0.5f));

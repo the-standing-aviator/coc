@@ -93,4 +93,3 @@ int SoundManager::playSfx(const std::string& path, float volume)
     const float outVol = clamp01(volume) * _masterVolume;
     return AudioEngine::play2d(path, false, outVol);
 }
-

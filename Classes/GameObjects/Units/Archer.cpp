@@ -22,5 +22,5 @@ Archer::Archer()
     trainingTimeSec = 25;
 
     // If you don't have this path, change it to your real troop texture.
-    image = "Textures/Troops/archer.png";
+    image = "archor/archor_stand.png";
 }

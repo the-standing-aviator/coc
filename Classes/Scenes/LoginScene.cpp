@@ -93,7 +93,7 @@ void LoginScene::buildSaveUI()
 
     auto panel = LayerColor::create(Color4B(240, 240, 240, 240), panelW, panelH);
     panel->setPosition(origin.x + visibleSize.width / 2 - panelW / 2,
-                       origin.y + visibleSize.height / 2 - panelH / 2);
+        origin.y + visibleSize.height / 2 - panelH / 2);
     _saveMask->addChild(panel);
 
     auto panelListener = EventListenerTouchOneByOne::create();
@@ -112,7 +112,7 @@ void LoginScene::buildSaveUI()
     backLabel->setColor(Color3B::BLACK);
     auto backItem = MenuItemLabel::create(backLabel, [this](Ref*) {
         this->backToMenu();
-    });
+        });
     backItem->setPosition(Vec2(panelW - 70, panelH - 55));
     auto backMenu = Menu::create(backItem, nullptr);
     backMenu->setPosition(Vec2::ZERO);
@@ -150,12 +150,12 @@ void LoginScene::refreshSaveList()
     {
         _saveScroll->setInnerContainerSize(_saveScroll->getContentSize());
         _saveContent->setPosition(Vec2(_saveScroll->getContentSize().width * 0.5f,
-                                       _saveScroll->getContentSize().height));
+            _saveScroll->getContentSize().height));
 
         auto msg = Label::createWithSystemFont("No saves.\nGo back and create a new save.", "Arial", 30);
         msg->setColor(Color3B::BLACK);
         msg->setPosition(Vec2(_saveScroll->getContentSize().width * 0.5f,
-                              _saveScroll->getContentSize().height * 0.5f));
+            _saveScroll->getContentSize().height * 0.5f));
         _saveContent->addChild(msg);
         return;
     }
@@ -171,8 +171,8 @@ void LoginScene::refreshSaveList()
         float y = innerH - rowH * (i + 0.5f);
 
         auto rowBg = LayerColor::create(Color4B(220, 220, 220, 255),
-                                        _saveScroll->getContentSize().width,
-                                        rowH - 6);
+            _saveScroll->getContentSize().width,
+            rowH - 6);
         rowBg->setAnchorPoint(Vec2(0.5f, 0.5f));
         rowBg->setPosition(Vec2(_saveScroll->getContentSize().width * 0.5f, y));
         _saveContent->addChild(rowBg);
@@ -193,7 +193,7 @@ void LoginScene::refreshSaveList()
             Director::getInstance()->replaceScene(
                 TransitionFade::create(0.25f, MainScene::createScene())
             );
-        });
+            });
 
         // Delete
         auto delLabel = Label::createWithSystemFont("Delete", "Arial", 28);
@@ -201,7 +201,7 @@ void LoginScene::refreshSaveList()
         auto delItem = MenuItemLabel::create(delLabel, [this, meta](Ref*) {
             SaveSystem::remove(meta.slot);
             this->refreshSaveList();
-        });
+            });
 
         enterItem->setPosition(Vec2(rowBg->getContentSize().width - 170, rowH * 0.5f));
         delItem->setPosition(Vec2(rowBg->getContentSize().width - 70, rowH * 0.5f));

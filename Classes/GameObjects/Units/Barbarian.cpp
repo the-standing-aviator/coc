@@ -26,5 +26,5 @@ Barbarian::Barbarian()
     // Example alternatives:
     //   "Textures/Troops/barbarian.png"
     //   "barbarian.png"
-    image = "Textures/Troops/barbarian.png";
+    image = "barbarian/barbarian_stand.png";
 }

@@ -19,13 +19,13 @@
 #include <ctime>
 
 namespace {
-static float randomRealSafe(float a, float b)
-{
-    if (std::isnan(a) || std::isnan(b)) return 0.0f;
-    if (a > b) std::swap(a, b);
-    if (a == b) return a;
-    return cocos2d::RandomHelper::random_real(a, b);
-}
+    static float randomRealSafe(float a, float b)
+    {
+        if (std::isnan(a) || std::isnan(b)) return 0.0f;
+        if (a > b) std::swap(a, b);
+        if (a == b) return a;
+        return cocos2d::RandomHelper::random_real(a, b);
+    }
 }
 
 #include "ui/CocosGUI.h"
@@ -295,7 +295,7 @@ void MainScene::openEscMenu()
     _escMask->addChild(panel);
 
     // Allow touches to pass to panel children (buttons/scroll)
-panel->setScale(0.1f);
+    panel->setScale(0.1f);
     panel->runAction(EaseBackOut::create(ScaleTo::create(0.22f, 1.0f)));
 
     auto title = Label::createWithSystemFont("Menu", "Arial", 52);
@@ -598,10 +598,10 @@ void MainScene::update(float dt)
                     refreshTrainingCampUI();
                 }
 
-                if (_trainCapLabel) 
+                if (_trainCapLabel)
                 {
                     int totalCap = ResourceManager::getPopulationCap();
-                    int usedHousing = tc->getUsedHousing(); 
+                    int usedHousing = tc->getUsedHousing();
                     char buf[64];
                     snprintf(buf, sizeof(buf), "%d / %d", usedHousing, totalCap);
                     _trainCapLabel->setString(buf);
@@ -692,7 +692,7 @@ void MainScene::openUpgradeWindowForIndex(int idx)
         auto trainItem = MenuItemLabel::create(trainLabel, [this, idx, modal](Ref*) {
             if (modal) modal->removeFromParent();
             openTrainingCampPicker(idx);
-        });
+            });
         // place above the bottom buttons
         trainItem->setPosition(Vec2(modal->getContentSize().width * 0.5f, 80.f));
         auto trainMenu = Menu::create(trainItem, nullptr);
@@ -712,7 +712,7 @@ void MainScene::setupInteraction()
         auto ev = static_cast<EventMouse*>(e);
         // When a modal overlay (attack target picker) is open, let the overlay handle mouse wheel.
         if (_attackMask && _attackMask->isVisible()) return;
-float delta = ev->getScrollY();
+        float delta = ev->getScrollY();
         float k = 1.1f;
         if (delta > 0) setZoom(_zoom / k);
         else if (delta < 0) setZoom(_zoom * k);
@@ -1146,8 +1146,8 @@ void MainScene::loadFromCurrentSaveOrCreate()
     ResourceManager::setPopulation(data.population);
 
 
-restoreStandTroopsFromSave(data);
-applyStandTroopsToTrainingCamps();
+    restoreStandTroopsFromSave(data);
+    applyStandTroopsToTrainingCamps();
 
     _saveDirty = false;
     _autosaveTimer = 0.0f;
@@ -1178,16 +1178,16 @@ void MainScene::saveToCurrentSlot(bool force)
 
 
 
-data.trainedTroops.clear();
-data.trainedTroops.reserve(_standTroops.size());
-for (const auto& t : _standTroops)
-{
-    SaveTrainedTroop st;
-    st.type = t.type;
-    st.r = t.r;
-    st.c = t.c;
-    data.trainedTroops.push_back(st);
-}
+    data.trainedTroops.clear();
+    data.trainedTroops.reserve(_standTroops.size());
+    for (const auto& t : _standTroops)
+    {
+        SaveTrainedTroop st;
+        st.type = t.type;
+        st.r = t.r;
+        st.c = t.c;
+        data.trainedTroops.push_back(st);
+    }
 
     for (const auto& b : _buildings)
     {
@@ -1277,7 +1277,7 @@ void MainScene::openAttackTargetPicker()
     panel->setIgnoreAnchorPointForPosition(false);
     panel->setAnchorPoint(Vec2(0, 0));
     panel->setPosition(origin.x + visibleSize.width / 2 - panelW / 2,
-                       origin.y + visibleSize.height / 2 - panelH / 2);
+        origin.y + visibleSize.height / 2 - panelH / 2);
     _attackMask->addChild(panel);
 
     _attackPanel = panel;
@@ -1291,7 +1291,7 @@ void MainScene::openAttackTargetPicker()
     closeLabel->setColor(Color3B::WHITE);
     auto closeItem = MenuItemLabel::create(closeLabel, [this](Ref*) {
         closeAttackTargetPicker();
-    });
+        });
     closeItem->setPosition(Vec2(panelW - 30, panelH - 40));
     auto closeMenu = Menu::create(closeItem, nullptr);
     closeMenu->setPosition(Vec2::ZERO);
@@ -1332,7 +1332,7 @@ void MainScene::openAttackTargetPicker()
         auto msg = Label::createWithSystemFont("No other saves to attack.", "Arial", 30);
         msg->setColor(Color3B::WHITE);
         msg->setPosition(Vec2(_attackScroll->getContentSize().width * 0.5f,
-                              _attackScroll->getContentSize().height * 0.5f));
+            _attackScroll->getContentSize().height * 0.5f));
         _attackContent->addChild(msg);
     }
     else
@@ -1347,8 +1347,8 @@ void MainScene::openAttackTargetPicker()
             float y = innerH - rowH * (i + 1);
 
             auto rowBg = LayerColor::create(Color4B(120, 120, 120, 255),
-                                            _attackScroll->getContentSize().width,
-                                            rowH - 6);
+                _attackScroll->getContentSize().width,
+                rowH - 6);
             rowBg->setIgnoreAnchorPointForPosition(false);
             rowBg->setAnchorPoint(Vec2(0, 0));
             rowBg->setPosition(Vec2(0, y + 3));
@@ -1368,7 +1368,7 @@ void MainScene::openAttackTargetPicker()
                 closeAttackTargetPicker();
                 auto scene = BattleScene::createScene();
                 Director::getInstance()->replaceScene(TransitionFade::create(0.3f, scene));
-            });
+                });
             attackItem->setPosition(Vec2(_attackScroll->getContentSize().width - 60, (rowH - 6) * 0.5f));
             auto rowMenu = Menu::create(attackItem, nullptr);
             rowMenu->setPosition(Vec2::ZERO);
@@ -1381,28 +1381,28 @@ void MainScene::openAttackTargetPicker()
     {
         _attackMouseListener = EventListenerMouse::create();
         _attackMouseListener->onMouseScroll = [this](Event* e)
-        {
-            auto m = static_cast<EventMouse*>(e);
-            if (!_attackMask || !_attackMask->isVisible() || !_attackScroll || !_attackPanel) return;
+            {
+                auto m = static_cast<EventMouse*>(e);
+                if (!_attackMask || !_attackMask->isVisible() || !_attackScroll || !_attackPanel) return;
 
-            Vec2 glPos = Director::getInstance()->convertToGL(Vec2(m->getCursorX(), m->getCursorY()));
-            Vec2 local = _attackPanel->convertToNodeSpace(glPos);
-            Rect r(0, 0, _attackPanel->getContentSize().width, _attackPanel->getContentSize().height);
-            if (!r.containsPoint(local)) return;
+                Vec2 glPos = Director::getInstance()->convertToGL(Vec2(m->getCursorX(), m->getCursorY()));
+                Vec2 local = _attackPanel->convertToNodeSpace(glPos);
+                Rect r(0, 0, _attackPanel->getContentSize().width, _attackPanel->getContentSize().height);
+                if (!r.containsPoint(local)) return;
 
-            float dy = m->getScrollY() * 60.0f;
-            Vec2 pos = _attackScroll->getInnerContainerPosition();
-            pos.y += dy;
+                float dy = m->getScrollY() * 60.0f;
+                Vec2 pos = _attackScroll->getInnerContainerPosition();
+                pos.y += dy;
 
-            float minY = _attackScroll->getContentSize().height - _attackScroll->getInnerContainerSize().height;
-            if (minY > 0) minY = 0;
+                float minY = _attackScroll->getContentSize().height - _attackScroll->getInnerContainerSize().height;
+                if (minY > 0) minY = 0;
 
-            if (pos.y > 0) pos.y = 0;
-            if (pos.y < minY) pos.y = minY;
+                if (pos.y > 0) pos.y = 0;
+                if (pos.y < minY) pos.y = minY;
 
-            _attackScroll->setInnerContainerPosition(pos);
-            e->stopPropagation();
-        };
+                _attackScroll->setInnerContainerPosition(pos);
+                e->stopPropagation();
+            };
         _eventDispatcher->addEventListenerWithSceneGraphPriority(_attackMouseListener, _attackMask);
     }
 }
@@ -1419,7 +1419,7 @@ void MainScene::closeAttackTargetPicker()
         _attackPanel = nullptr;
         _attackScroll = nullptr;
         _attackContent = nullptr;
-_attackMask->removeFromParent();
+        _attackMask->removeFromParent();
         _attackMask = nullptr;
     }
 }
@@ -1490,19 +1490,20 @@ void MainScene::openTrainingCampPicker(int buildingIndex)
     rTitle->setPosition(Vec2(20.f, panelH - 100.f));
     panel->addChild(rTitle, 2);
 
-    
+
     float readyIconH = 80.0f;
     {
         auto probe = Sprite::create(TrainingCamp::getTroopIcon(TrainingCamp::TROOP_BARBARIAN));
         if (probe) readyIconH = probe->getContentSize().height;
     }
-//
+    //
     _trainReadyRow = safeCreateNode();
 
     if (_trainReadyRow) {
         _trainReadyRow->setPosition(Vec2(rTitle->getPositionX() + rTitle->getContentSize().width + 15.0f, rTitle->getPositionY() - readyIconH));
         panel->addChild(_trainReadyRow, 2);
-    } else {
+    }
+    else {
         CCLOG("[TrainingUI] Failed to create _trainReadyRow");
     }
 
@@ -1512,7 +1513,8 @@ void MainScene::openTrainingCampPicker(int buildingIndex)
     if (_trainSelectRow) {
         _trainSelectRow->setPosition(Vec2(20.f, 25.f));
         panel->addChild(_trainSelectRow, 2);
-    } else {
+    }
+    else {
         CCLOG("[TrainingUI] Failed to create _trainSelectRow");
     }
 
@@ -1610,7 +1612,7 @@ void MainScene::refreshTrainingCampUI()
                 _saveDirty = true;
                 refreshTrainingCampUI();
             }
-});
+            });
         minusItem->setAnchorPoint(Vec2(1, 1));
         minusItem->setPosition(Vec2(iconSize.width - 4.f, iconSize.height - 4.f));
         auto menu = Menu::create(minusItem, nullptr);
@@ -1749,7 +1751,7 @@ void MainScene::restoreStandTroopsFromSave(const SaveData& data)
         if (!sp) continue;
 
         Vec2 center(_anchor.x + (c - r) * (_tileW * 0.5f),
-                    _anchor.y - (c + r) * (_tileH * 0.5f));
+            _anchor.y - (c + r) * (_tileH * 0.5f));
         float jx = randomRealSafe(-_tileW * 0.15f, _tileW * 0.15f);
         float jy = randomRealSafe(-_tileH * 0.10f, _tileH * 0.10f);
         Vec2 pos = center + Vec2(jx, _tileH * 0.10f + jy);
@@ -1882,7 +1884,7 @@ void MainScene::spawnStandTroop(int troopType)
 
     // Compute isometric world position for the chosen cell.
     Vec2 center(_anchor.x + (chosenC - chosenR) * (_tileW * 0.5f),
-                _anchor.y - (chosenC + chosenR) * (_tileH * 0.5f));
+        _anchor.y - (chosenC + chosenR) * (_tileH * 0.5f));
 
     // Add slight jitter so troops do not perfectly overlap.
     float jx = randomRealSafe(-_tileW * 0.15f, _tileW * 0.15f);

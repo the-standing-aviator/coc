@@ -41,7 +41,7 @@ public:
         costElixir = 0;
         trainingTimeSec = 0;
 
-        image = "troops/wall_breaker.png"; // Optional: change to your actual resource path
+        image = "wall_breaker/wall_breaker_stand.png"; // Optional: change to your actual resource path
     }
 
     virtual ~WallBreaker() = default;

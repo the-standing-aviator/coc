@@ -36,7 +36,7 @@ public:
         lvl->setColor(cocos2d::Color3B::BLACK);
         lvl->enableOutline(cocos2d::Color4B::WHITE, 2);
         lvl->setPosition(cocos2d::Vec2(s->getContentSize().width * 0.5f,
-                                       s->getContentSize().height * 0.55f));
+            s->getContentSize().height * 0.55f));
         s->addChild(lvl, 99);
 
         return s;

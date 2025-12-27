@@ -63,32 +63,32 @@ public:
     // Troop housing sizes
     static int getTroopHousing(TroopType t) {
         switch (t) {
-            case TROOP_BARBARIAN:   return 1;
-            case TROOP_ARCHER:      return 1;
-            case TROOP_GIANT:       return 5;
-            case TROOP_WALLBREAKER: return 2;
-            default:                return 1;
+        case TROOP_BARBARIAN:   return 1;
+        case TROOP_ARCHER:      return 1;
+        case TROOP_GIANT:       return 5;
+        case TROOP_WALLBREAKER: return 2;
+        default:                return 1;
         }
     }
 
     // UI icons
     static const char* getTroopIcon(TroopType t) {
         switch (t) {
-            case TROOP_BARBARIAN:   return "ui/barbarian_choose_button.png";
-            case TROOP_ARCHER:      return "ui/archer_choose_button.png";
-            case TROOP_GIANT:       return "ui/giant_choose_buuton.png";
-            case TROOP_WALLBREAKER: return "ui/wallbreaker_choose_button.png";
-            default:                return "ui/barbarian_choose_button.png";
+        case TROOP_BARBARIAN:   return "ui/barbarian_choose_button.png";
+        case TROOP_ARCHER:      return "ui/archer_choose_button.png";
+        case TROOP_GIANT:       return "ui/giant_choose_buuton.png";
+        case TROOP_WALLBREAKER: return "ui/wallbreaker_choose_button.png";
+        default:                return "ui/barbarian_choose_button.png";
         }
     }
 
     static int getUnlockLevel(TroopType t) {
         switch (t) {
-            case TROOP_BARBARIAN:   return 1;
-            case TROOP_ARCHER:      return 2;
-            case TROOP_GIANT:       return 3;
-            case TROOP_WALLBREAKER: return 4;
-            default:                return 1;
+        case TROOP_BARBARIAN:   return 1;
+        case TROOP_ARCHER:      return 2;
+        case TROOP_GIANT:       return 3;
+        case TROOP_WALLBREAKER: return 4;
+        default:                return 1;
         }
     }
 
