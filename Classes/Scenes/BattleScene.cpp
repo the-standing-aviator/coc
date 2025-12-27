@@ -4,7 +4,7 @@
 #include "Data/SaveSystem.h"
 
 #include "GameObjects/Buildings/Building.h"
-#include "GameObjects/Buildings/TroopBuilding.h"
+#include "GameObjects/Buildings/TroopBuilding.h"  // TrainingCamp::getTroopIcon
 #include "GameObjects/Units/UnitBase.h"
 
 #include "Managers/SoundManager.h"
@@ -13,6 +13,10 @@
 #include <algorithm>
 #include <cmath>
 #include <chrono>
+
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 USING_NS_CC;
 
@@ -75,117 +79,62 @@ bool BattleScene::isPointInCellDiamondLocal(const Vec2& localPos, int r, int c) 
 
     float nx = std::abs(d.x) / (_tileW * 0.5f);
     float ny = std::abs(d.y) / (_tileH * 0.5f);
-    return (nx + ny) <= 1.08f;
+    return (nx + ny) <= 1.08f; // tolerance
 }
 
-void BattleScene::buildEnemyOccupyGrid(bool outOcc[30][30]) const
+bool BattleScene::getCellFromClick(const cocos2d::Vec2& clickLocalPos, int& outR, int& outC) const
+{
+    Vec2 rc = worldToGridLocal(clickLocalPos);
+
+    int r = (int)std::round(rc.x);
+    int c = (int)std::round(rc.y);
+
+    if (r < 0 || r >= _rows || c < 0 || c >= _cols) return false;
+    if (!isPointInCellDiamondLocal(clickLocalPos, r, c)) return false;
+
+    outR = r;
+    outC = c;
+    return true;
+}
+
+void BattleScene::buildEnemyForbiddenGrid(bool outForbid[30][30]) const
 {
     for (int r = 0; r < 30; ++r)
         for (int c = 0; c < 30; ++c)
-            outOcc[r][c] = false;
+            outForbid[r][c] = false;
+
+    auto markForbid = [&](int rr, int cc) {
+        if (rr < 0 || rr >= 30 || cc < 0 || cc >= 30) return;
+        outForbid[rr][cc] = true;
+        };
 
     for (const auto& b : _enemyBuildings)
     {
         if (!b.building) continue;
-        if (b.building->hp <= 0) continue;
+        if (b.building->hp <= 0) continue; // 被摧毁则解除禁放（如果你不想解除，删掉此行）
 
         int br = b.r;
         int bc = b.c;
-        if (br < 0 || br >= 30 || bc < 0 || bc >= 30) continue;
 
-        if (b.id == 10)
-        {
-            outOcc[br][bc] = true;
-        }
-        else
-        {
-            for (int dr = -1; dr <= 1; ++dr)
-                for (int dc = -1; dc <= 1; ++dc)
-                {
-                    int rr = br + dr;
-                    int cc = bc + dc;
-                    if (rr < 0 || rr >= 30 || cc < 0 || cc >= 30) continue;
-                    outOcc[rr][cc] = true;
-                }
-        }
-    }
-}
+        // footprint：墙 1x1，其它按 3x3
+        int r0 = (b.id == 10 ? 0 : -1);
+        int r1 = (b.id == 10 ? 0 : 1);
+        int c0 = (b.id == 10 ? 0 : -1);
+        int c1 = (b.id == 10 ? 0 : 1);
 
-bool BattleScene::isAdjacentToOccupied(const bool occ[30][30], int r, int c) const
-{
-    for (int dr = -1; dr <= 1; ++dr)
-        for (int dc = -1; dc <= 1; ++dc)
-        {
-            if (dr == 0 && dc == 0) continue;
-            int rr = r + dr;
-            int cc = c + dc;
-            if (rr < 0 || rr >= 30 || cc < 0 || cc >= 30) continue;
-            if (occ[rr][cc]) return true;
-        }
-    return false;
-}
-
-bool BattleScene::findDeployCellFromClick(const Vec2& clickLocalPos, int& outR, int& outC) const
-{
-    Vec2 rc = worldToGridLocal(clickLocalPos);
-    int r0 = (int)std::round(rc.x);
-    int c0 = (int)std::round(rc.y);
-
-    if (r0 < 0 || r0 >= _rows || c0 < 0 || c0 >= _cols) return false;
-    if (!isPointInCellDiamondLocal(clickLocalPos, r0, c0)) return false;
-
-    bool occ[30][30];
-    buildEnemyOccupyGrid(occ);
-
-    auto isValidDeploy = [&](int r, int c) -> bool {
-        if (r < 0 || r >= _rows || c < 0 || c >= _cols) return false;
-        if (occ[r][c]) return false;
-        if (!isAdjacentToOccupied(occ, r, c)) return false;
-        return true;
-        };
-
-    if (isValidDeploy(r0, c0))
-    {
-        outR = r0;
-        outC = c0;
-        return true;
-    }
-
-    float bestDist = 1e30f;
-    int bestR = -1, bestC = -1;
-
-    for (int rad = 1; rad <= 8; ++rad)
-    {
-        int rMin = std::max(0, r0 - rad);
-        int rMax = std::min(_rows - 1, r0 + rad);
-        int cMin = std::max(0, c0 - rad);
-        int cMax = std::min(_cols - 1, c0 + rad);
-
-        for (int r = rMin; r <= rMax; ++r)
-            for (int c = cMin; c <= cMax; ++c)
+        for (int dr = r0; dr <= r1; ++dr)
+            for (int dc = c0; dc <= c1; ++dc)
             {
-                if (!isValidDeploy(r, c)) continue;
-                Vec2 center = gridToWorld(r, c);
-                float d = center.distance(clickLocalPos);
-                if (d < bestDist)
-                {
-                    bestDist = d;
-                    bestR = r;
-                    bestC = c;
-                }
+                int rr = br + dr;
+                int cc = bc + dc;
+                if (rr < 0 || rr >= 30 || cc < 0 || cc >= 30) continue;
+
+                // 缓冲 1 格（含对角）
+                for (int er = -1; er <= 1; ++er)
+                    for (int ec = -1; ec <= 1; ++ec)
+                        markForbid(rr + er, cc + ec);
             }
-
-        if (bestR != -1) break;
     }
-
-    if (bestR != -1)
-    {
-        outR = bestR;
-        outC = bestC;
-        return true;
-    }
-
-    return false;
 }
 
 void BattleScene::renderTargetVillage()
@@ -319,6 +268,7 @@ bool BattleScene::init()
     _troopCounts = SaveSystem::getBattleReadyTroops();
     refreshTroopBar();
 
+    // Keyboard 1-4 select troop
     auto troopKey = EventListenerKeyboard::create();
     troopKey->onKeyPressed = [this](EventKeyboard::KeyCode code, Event*) {
         if (code == EventKeyboard::KeyCode::KEY_1) setSelectedTroop(1);
@@ -328,6 +278,7 @@ bool BattleScene::init()
         };
     _eventDispatcher->addEventListenerWithSceneGraphPriority(troopKey, this);
 
+    // Click: bar selection OR deploy at exact click
     auto touch = EventListenerTouchOneByOne::create();
     touch->setSwallowTouches(false);
     touch->onTouchBegan = [this](Touch* t, Event*) {
@@ -341,6 +292,7 @@ bool BattleScene::init()
     startPhase(Phase::Scout, 45.0f);
     scheduleUpdate();
 
+    // ESC menu
     auto listener = EventListenerKeyboard::create();
     listener->onKeyPressed = [this](EventKeyboard::KeyCode code, Event*) {
         if (code == EventKeyboard::KeyCode::KEY_ESCAPE)
@@ -499,6 +451,7 @@ bool BattleScene::handleTroopBarClick(const cocos2d::Vec2& glPos)
     if (!_troopBar) return false;
 
     Vec2 local = _troopBar->convertToNodeSpace(glPos);
+
     for (const auto& slot : _troopSlots)
     {
         if (!slot.root) continue;
@@ -511,6 +464,7 @@ bool BattleScene::handleTroopBarClick(const cocos2d::Vec2& glPos)
         }
     }
 
+    // 点击到兵种栏背景，也吞掉，避免误放
     Size s = _troopBar->getContentSize();
     Rect bg(0, 0, s.width, s.height);
     if (bg.containsPoint(local)) return true;
@@ -521,6 +475,7 @@ bool BattleScene::handleTroopBarClick(const cocos2d::Vec2& glPos)
 bool BattleScene::isPosInTroopBar(const cocos2d::Vec2& glPos) const
 {
     if (!_troopBar) return false;
+
     Vec2 local = _troopBar->convertToNodeSpace(glPos);
 
     for (const auto& slot : _troopSlots)
@@ -559,7 +514,7 @@ void BattleScene::showBattleToast(const std::string& msg)
     this->addChild(label, 200);
 
     label->runAction(Sequence::create(
-        DelayTime::create(1.5f),
+        DelayTime::create(1.2f),
         FadeOut::create(0.25f),
         RemoveSelf::create(),
         nullptr
@@ -571,6 +526,7 @@ void BattleScene::deploySelectedTroop(const cocos2d::Vec2& glPos)
     if (!_deployEnabled) return;
     if (_battleEnded) return;
 
+    // debounce
     long long nowMs = std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::steady_clock::now().time_since_epoch()).count();
     if (nowMs - _lastDeployMs < 50) return;
@@ -595,8 +551,11 @@ void BattleScene::deploySelectedTroop(const cocos2d::Vec2& glPos)
     if (left <= 0)
     {
         _troopCounts.erase(it);
-        if (_selectedTroopType != -1 && _troopCounts.find(_selectedTroopType) == _troopCounts.end())
+        if (_selectedTroopType != -1 &&
+            _troopCounts.find(_selectedTroopType) == _troopCounts.end())
+        {
             _selectedTroopType = -1;
+        }
     }
     else
     {
@@ -619,11 +578,26 @@ bool BattleScene::spawnUnit(int unitId, const cocos2d::Vec2& clickLocalPos)
     auto it = _troopCounts.find(unitId);
     if (it == _troopCounts.end() || it->second <= 0) return false;
 
+    // 1) 判定点击是否在地图有效格内
     int r = -1, c = -1;
-    if (!findDeployCellFromClick(clickLocalPos, r, c))
+    if (!getCellFromClick(clickLocalPos, r, c))
+    {
+        showBattleToast("Out of map");
         return false;
+    }
 
-    int level = 1; // TODO: read actual level from save
+    // 2) 禁放区：建筑 + 周围一圈
+    bool forbid[30][30];
+    buildEnemyForbiddenGrid(forbid);
+
+    if (forbid[r][c])
+    {
+        showBattleToast("Can't deploy here");
+        return false;
+    }
+
+    // 3) 创建单位
+    int level = 1; // TODO: 你后续如果要读取训练等级，在这里换成存档等级
     std::unique_ptr<UnitBase> u = UnitFactory::create(unitId, level);
     if (!u)
     {
@@ -634,19 +608,17 @@ bool BattleScene::spawnUnit(int unitId, const cocos2d::Vec2& clickLocalPos)
     auto spr = u->createSprite();
     if (!spr) spr = Sprite::create();
 
-    // ===== 关键：大小按 MainScene 训练后一样的规则 =====
+    // 4) 关键：精确落点 = 鼠标点击位置（脚底对齐）
     spr->setAnchorPoint(Vec2(0.5f, 0.0f));
 
-    Vec2 center = gridToWorld(r, c);
-    float jx = CCRANDOM_MINUS1_1() * (_tileW * 0.15f);
-    float jy = CCRANDOM_MINUS1_1() * (_tileH * 0.10f);
-    Vec2 pos = center + Vec2(jx, _tileH * 0.10f + jy);
-
+    // 大小仍保持训练后那套比例
     float desiredW = _tileW * 0.60f;
     float s = desiredW / std::max(1.0f, spr->getContentSize().width);
     spr->setScale(s);
-    spr->setPosition(pos);
 
+    spr->setPosition(clickLocalPos);
+
+    // z 序用 r+c
     int z = 5 + r + c;
     _world->addChild(spr, z);
 
@@ -704,6 +676,7 @@ void BattleScene::checkBattleResult(bool timeUp)
 {
     if (_battleEnded) return;
 
+    // WIN: all non-wall buildings destroyed
     bool anyNonWallAlive = false;
     for (auto& b : _enemyBuildings)
     {
@@ -769,7 +742,7 @@ void BattleScene::update(float dt)
     updateBattleHUD();
 }
 
-// ===== ESC menu / settings（保持你之前逻辑，不影响本次问题）=====
+// ================= ESC menu / settings =================
 void BattleScene::openEscMenu()
 {
     if (_escMask) return;
@@ -814,7 +787,13 @@ void BattleScene::openEscMenu()
         });
 
     auto exitLabel = Label::createWithSystemFont("Exit Game", "Arial", 42);
-    auto exitItem = MenuItemLabel::create(exitLabel, [](Ref*) { Director::getInstance()->end(); });
+    auto exitItem = MenuItemLabel::create(exitLabel, [](Ref*) {
+#if (CC_TARGET_PLATFORM == CC_PLATFORM_WIN32)
+        ExitProcess(0);
+#else
+        Director::getInstance()->end();
+#endif
+        });
 
     settingsItem->setPosition(Vec2(panelW / 2, panelH / 2 + 70));
     backItem->setPosition(Vec2(panelW / 2, panelH / 2));
