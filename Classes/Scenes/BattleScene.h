@@ -50,6 +50,12 @@ private:
     void updateBattleHUD();
     void showReturnButton();
 
+    // ===== Result / confirm popups =====
+    void showBattleResultPopup(bool win);
+    void openAbandonConfirmPopup();
+    void closeAbandonConfirmPopup(bool resumeBattle);
+    void endBattleAndShowResult(bool win);
+
     // Battle result check
     void checkBattleResult(bool timeUp);
 
@@ -110,6 +116,11 @@ private:
     cocos2d::LayerColor* _escMask = nullptr;
     cocos2d::LayerColor* _settingsMask = nullptr;
 
+    // New: ESC is used only for "abandon?" confirmation during battle.
+    cocos2d::LayerColor* _abandonMask = nullptr;
+    cocos2d::LayerColor* _resultMask = nullptr;
+    bool _pausedByPopup = false;
+
     cocos2d::Node* _world = nullptr;
 
     // Zoom & pan for enemy village viewing
@@ -127,6 +138,9 @@ private:
     };
 
     std::unordered_map<int, int> _troopCounts; // local battle session counts
+
+    // Deployed troop counts (used as "losses" in the result popup).
+    std::unordered_map<int, int> _deployedCounts;
 
     // Attacker troop levels (from Laboratory research).
     std::unordered_map<int, int> _troopLevels;

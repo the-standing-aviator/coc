@@ -532,15 +532,24 @@ bool BattleScene::init()
     }
 
     // Enable zoom (mouse wheel) and pan (mouse drag) for viewing the enemy village.
-    _minZoom = 0.5f;
     _maxZoom = 2.5f;
+    _minZoom = 0.1f;
+    if (_background)
+    {
+        // Match MainScene logic: prevent zooming out so far that black borders appear.
+        Size img = _background->getContentSize();
+        float base = _background->getScaleX();
+        float minZ = std::max(visibleSize.width / (img.width * base), visibleSize.height / (img.height * base));
+        _minZoom = std::max(minZ, 0.1f);
+    }
     setZoom(1.0f);
 
     auto mouse = EventListenerMouse::create();
     mouse->onMouseScroll = [this](Event* e) {
         auto m = static_cast<EventMouse*>(e);
-        float delta = m->getScrollY() * 0.10f;
-        setZoom(_zoom + delta);
+        float scroll = m->getScrollY();
+        if (scroll > 0) setZoom(_zoom * 1.10f);
+        else if (scroll < 0) setZoom(_zoom / 1.10f);
     };
 
     // Left click:
@@ -692,18 +701,22 @@ bool BattleScene::init()
     startPhase(Phase::Scout, 45.0f);
     scheduleUpdate();
 
-    // ESC menu toggle
+    // ESC behavior (requested): do NOT open settings.
+    // Only show an "abandon?" confirmation popup and pause the battle timer while it is visible.
     auto listener = EventListenerKeyboard::create();
     listener->onKeyPressed = [this](EventKeyboard::KeyCode code, Event*) {
-        if (code == EventKeyboard::KeyCode::KEY_ESCAPE) {
-            if (_settingsMask) {
-                _settingsMask->removeFromParent();
-                _settingsMask = nullptr;
-                return;
-            }
-            if (_escMask) closeEscMenu();
-            else openEscMenu();
+        if (code != EventKeyboard::KeyCode::KEY_ESCAPE) return;
+        if (_battleEnded || _phase == Phase::End) return;
+
+        // If a result popup is showing, ignore ESC.
+        if (_resultMask) return;
+
+        // Toggle abandon popup.
+        if (_abandonMask) {
+            // Do not resume by ESC; user must pick a button.
+            return;
         }
+        openAbandonConfirmPopup();
     };
     _eventDispatcher->addEventListenerWithSceneGraphPriority(listener, this);
 
@@ -835,31 +848,15 @@ void BattleScene::checkBattleResult(bool timeUp)
     // Result logic: TownHall destroyed -> victory, otherwise defeated.
     bool win = townHallDestroyed;
 
-    _battleEnded = true;
-    _phase = Phase::End;
-    _phaseRemaining = 0.0f;
-    updateBattleHUD();
-    this->unscheduleUpdate();
-    showReturnButton();
-
-    // Apply loot to both villages and persist once at battle settlement.
-    settleBattleLoot();
-    persistBattleSaves();
-
-    auto visibleSize = Director::getInstance()->getVisibleSize();
-    auto origin = Director::getInstance()->getVisibleOrigin();
-
-    auto result = Label::createWithSystemFont(win ? "victory" : "defeated", "Arial", 96);
-    result->setPosition(origin + visibleSize / 2 + Vec2(0, 90));
-    this->addChild(result, 150);
-
-    result->setScale(0.2f);
-    result->runAction(EaseBackOut::create(ScaleTo::create(0.35f, 1.0f)));
+    endBattleAndShowResult(win);
 }
 
 void BattleScene::update(float dt)
 {
     if (_phase == Phase::End) return;
+
+    // Pause battle logic and countdown when a modal popup is open.
+    if (_pausedByPopup) return;
 
     _phaseRemaining -= dt;
 
@@ -960,6 +957,206 @@ for (auto& eb : _enemyBuildings)
     }
 
     updateBattleHUD();
+}
+
+void BattleScene::endBattleAndShowResult(bool win)
+{
+    if (_battleEnded) return;
+
+    _battleEnded = true;
+    _phase = Phase::End;
+    _phaseRemaining = 0.0f;
+
+    // Stop the battle loop.
+    this->unscheduleUpdate();
+    updateBattleHUD();
+
+    // Close any modal popups.
+    if (_abandonMask) {
+        _abandonMask->removeFromParent();
+        _abandonMask = nullptr;
+    }
+    _pausedByPopup = false;
+
+    // Apply loot to both villages and persist once at battle settlement.
+    settleBattleLoot();
+    persistBattleSaves();
+
+    // SFX: battle result.
+    if (win) SoundManager::playSfxRandom("battle_win", 1.0f);
+    else     SoundManager::playSfxRandom("battle_lost", 1.0f);
+
+    showBattleResultPopup(win);
+}
+
+void BattleScene::showBattleResultPopup(bool win)
+{
+    if (_resultMask) return;
+
+    auto vs = Director::getInstance()->getVisibleSize();
+    auto origin = Director::getInstance()->getVisibleOrigin();
+
+    _resultMask = LayerColor::create(Color4B(0, 0, 0, 180));
+    this->addChild(_resultMask, 500);
+
+    auto maskListener = EventListenerTouchOneByOne::create();
+    maskListener->setSwallowTouches(true);
+    maskListener->onTouchBegan = [this](Touch*, Event*) { return _resultMask && _resultMask->isVisible(); };
+    _eventDispatcher->addEventListenerWithSceneGraphPriority(maskListener, _resultMask);
+
+    const float panelW = 720.0f;
+    const float panelH = 520.0f;
+    auto panel = LayerColor::create(Color4B(255, 255, 255, 255), panelW, panelH);
+    panel->setPosition(origin.x + vs.width * 0.5f - panelW * 0.5f,
+        origin.y + vs.height * 0.5f - panelH * 0.5f);
+    _resultMask->addChild(panel);
+
+    auto panelListener = EventListenerTouchOneByOne::create();
+    panelListener->setSwallowTouches(true);
+    panelListener->onTouchBegan = [](Touch*, Event*) { return true; };
+    _eventDispatcher->addEventListenerWithSceneGraphPriority(panelListener, panel);
+
+    // Title
+    auto title = Label::createWithSystemFont(win ? "victory" : "defeated", "Arial", 78);
+    title->setColor(Color3B::BLACK);
+    title->setPosition(Vec2(panelW * 0.5f, panelH - 80.0f));
+    panel->addChild(title);
+
+    // Loot summary (raw looted values).
+    auto goldLbl = Label::createWithSystemFont(StringUtils::format("Gold: %d", std::max(0, _lootedGold)), "Arial", 36);
+    goldLbl->setColor(Color3B::BLACK);
+    goldLbl->setAnchorPoint(Vec2(0.5f, 0.5f));
+    goldLbl->setPosition(Vec2(panelW * 0.5f, panelH - 165.0f));
+    panel->addChild(goldLbl);
+
+    auto elixirLbl = Label::createWithSystemFont(StringUtils::format("Elixir: %d", std::max(0, _lootedElixir)), "Arial", 36);
+    elixirLbl->setColor(Color3B::BLACK);
+    elixirLbl->setAnchorPoint(Vec2(0.5f, 0.5f));
+    elixirLbl->setPosition(Vec2(panelW * 0.5f, panelH - 215.0f));
+    panel->addChild(elixirLbl);
+
+    // Troops deployed = troop losses (as requested).
+    std::string lines;
+    auto troopName = [](int type) -> std::string {
+        switch (type) {
+        case 1: return "barbarian";
+        case 2: return "archer";
+        case 3: return "giant";
+        case 4: return "wall_breaker";
+        default: return "troop";
+        }
+    };
+
+    for (int type = 1; type <= 4; ++type)
+    {
+        int cnt = 0;
+        auto it = _deployedCounts.find(type);
+        if (it != _deployedCounts.end()) cnt = it->second;
+        if (cnt <= 0) continue;
+        if (!lines.empty()) lines += "\n";
+        lines += troopName(type);
+        lines += "  ";
+        // Use a unicode escape to avoid source-encoding issues on Windows (MSVC).
+        // "\u00D7" = multiplication sign.
+        lines += u8"\u00D7";
+        lines += StringUtils::format("%d", cnt);
+    }
+    if (lines.empty()) lines = "none";
+
+    auto lossTitle = Label::createWithSystemFont("Troops Lost:", "Arial", 32);
+    lossTitle->setColor(Color3B::BLACK);
+    lossTitle->setAnchorPoint(Vec2(0.5f, 0.5f));
+    lossTitle->setPosition(Vec2(panelW * 0.5f, panelH - 285.0f));
+    panel->addChild(lossTitle);
+
+    auto lossLbl = Label::createWithSystemFont(lines, "Arial", 28);
+    lossLbl->setColor(Color3B::BLACK);
+    lossLbl->setAnchorPoint(Vec2(0.5f, 1.0f));
+    lossLbl->setPosition(Vec2(panelW * 0.5f, panelH - 320.0f));
+    panel->addChild(lossLbl);
+
+    // Return button
+    auto retLabel = Label::createWithSystemFont("return", "Arial", 46);
+    retLabel->setColor(Color3B::BLACK);
+    auto retItem = MenuItemLabel::create(retLabel, [this](Ref*) {
+        // Ensure settlement is applied, then persist.
+        settleBattleLoot();
+        persistBattleSaves();
+        SaveSystem::setBattleTargetSlot(-1);
+        Director::getInstance()->replaceScene(TransitionFade::create(0.35f, MainScene::createScene()));
+    });
+    retItem->setPosition(Vec2(panelW * 0.5f, 70.0f));
+    auto menu = Menu::create(retItem, nullptr);
+    menu->setPosition(Vec2::ZERO);
+    panel->addChild(menu, 2);
+}
+
+void BattleScene::openAbandonConfirmPopup()
+{
+    if (_abandonMask || _battleEnded || _phase == Phase::End) return;
+
+    _pausedByPopup = true;
+
+    auto vs = Director::getInstance()->getVisibleSize();
+    auto origin = Director::getInstance()->getVisibleOrigin();
+
+    _abandonMask = LayerColor::create(Color4B(0, 0, 0, 180));
+    this->addChild(_abandonMask, 450);
+
+    auto maskListener = EventListenerTouchOneByOne::create();
+    maskListener->setSwallowTouches(true);
+    maskListener->onTouchBegan = [this](Touch*, Event*) { return _abandonMask && _abandonMask->isVisible(); };
+    _eventDispatcher->addEventListenerWithSceneGraphPriority(maskListener, _abandonMask);
+
+    const float panelW = 640.0f;
+    const float panelH = 320.0f;
+    auto panel = LayerColor::create(Color4B(255, 255, 255, 255), panelW, panelH);
+    panel->setPosition(origin.x + vs.width * 0.5f - panelW * 0.5f,
+        origin.y + vs.height * 0.5f - panelH * 0.5f);
+    _abandonMask->addChild(panel);
+
+    auto panelListener = EventListenerTouchOneByOne::create();
+    panelListener->setSwallowTouches(true);
+    panelListener->onTouchBegan = [](Touch*, Event*) { return true; };
+    _eventDispatcher->addEventListenerWithSceneGraphPriority(panelListener, panel);
+
+    auto title = Label::createWithSystemFont("Abandon battle?", "Arial", 50);
+    title->setColor(Color3B::BLACK);
+    title->setPosition(Vec2(panelW * 0.5f, panelH - 90.0f));
+    panel->addChild(title);
+
+    auto yesLbl = Label::createWithSystemFont("Yes", "Arial", 44);
+    yesLbl->setColor(Color3B::BLACK);
+    auto yesItem = MenuItemLabel::create(yesLbl, [this](Ref*) {
+        closeAbandonConfirmPopup(false);
+        // Abandon is treated as defeated.
+        endBattleAndShowResult(false);
+    });
+
+    auto noLbl = Label::createWithSystemFont("No", "Arial", 44);
+    noLbl->setColor(Color3B::BLACK);
+    auto noItem = MenuItemLabel::create(noLbl, [this](Ref*) {
+        closeAbandonConfirmPopup(true);
+    });
+
+    yesItem->setPosition(Vec2(panelW * 0.35f, 85.0f));
+    noItem->setPosition(Vec2(panelW * 0.65f, 85.0f));
+
+    auto menu = Menu::create(yesItem, noItem, nullptr);
+    menu->setPosition(Vec2::ZERO);
+    panel->addChild(menu, 2);
+}
+
+void BattleScene::closeAbandonConfirmPopup(bool resumeBattle)
+{
+    if (_abandonMask) {
+        _abandonMask->removeFromParent();
+        _abandonMask = nullptr;
+    }
+
+    if (resumeBattle) {
+        _pausedByPopup = false;
+    }
 }
 
 void BattleScene::openEscMenu()
@@ -1355,6 +1552,7 @@ bool BattleScene::handleTroopBarClick(const cocos2d::Vec2& glPos)
 
         if (worldRect.containsPoint(glPos))
         {
+            SoundManager::playSfxRandom("button_click", 1.0f);
             if (_selectedTroopType == slot.type) setSelectedTroop(-1);
             else setSelectedTroop(slot.type);
             return true; // consumed
@@ -1629,6 +1827,9 @@ void BattleScene::deploySelectedTroop(const cocos2d::Vec2& glPos)
     }
 
     if (!spawnUnit(_selectedTroopType, worldLocal)) return;
+
+    // Record deployed troop count (used as "losses" in the result popup).
+    _deployedCounts[_selectedTroopType] += 1;
 
     // Play deploy SFX (Resources/music).
     if (_selectedTroopType == 2) {

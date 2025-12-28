@@ -27,6 +27,59 @@ static float randomRealSafe(float a, float b)
     if (a == b) return a;
     return cocos2d::RandomHelper::random_real(a, b);
 }
+
+static void playPickupSfxForBuildingId(int buildId)
+{
+    switch (buildId)
+    {
+    case 1: // Archer Tower
+        SoundManager::playSfxRandom("archer_tower_pick", 1.0f);
+        break;
+    case 2: // Cannon
+        SoundManager::playSfxRandom("cannon_pick", 1.0f);
+        break;
+    case 3: // Elixir Collector
+        SoundManager::playSfxRandom("elixir_pump_pick", 1.0f);
+        break;
+    case 4: // Elixir Storage
+        SoundManager::playSfxRandom("elixir_storage_pick", 1.0f);
+        break;
+    case 5: // Gold Mine
+        SoundManager::playSfxRandom("goldmine_pick", 1.0f);
+        break;
+    default:
+        SoundManager::playSfxRandom("building_pickup", 1.0f);
+        break;
+    }
+}
+
+static void playPlaceSfxForBuildingId(int buildId)
+{
+    switch (buildId)
+    {
+    case 1: // Archer Tower
+        SoundManager::playSfxRandom("archer_tower_place", 1.0f);
+        break;
+    case 2: // Cannon
+        SoundManager::playSfxRandom("cannon_drop", 1.0f);
+        break;
+    case 3: // Elixir Collector
+        SoundManager::playSfxRandom("elixir_pump_drop", 1.0f);
+        break;
+    case 4: // Elixir Storage
+        SoundManager::playSfxRandom("elixir_storage_drop", 1.0f);
+        break;
+    case 5: // Gold Mine
+        SoundManager::playSfxRandom("goldmine_drop", 1.0f);
+        break;
+    case 6: // Gold Storage
+        SoundManager::playSfxRandom("gold_storage_drop", 1.0f);
+        break;
+    default:
+        SoundManager::playSfxRandom("building_place", 1.0f);
+        break;
+    }
+}
 }
 
 #include "ui/CocosGUI.h"
@@ -140,6 +193,7 @@ bool MainScene::init()
     btn->setButtonScale(0.15f);
     btn->setButtonOffset(Vec2(16.f, 16.f));
     btn->onClicked = [this]() {
+        SoundManager::playSfxRandom("button_click", 1.0f);
         auto vs = Director::getInstance()->getVisibleSize();
         auto origin = Director::getInstance()->getVisibleOrigin();
         auto panel = LayerColor::create(Color4B::WHITE);
@@ -233,6 +287,7 @@ bool MainScene::init()
 						selectedSp->setTextureRect(Rect(0, 0, normalSp->getContentSize().width, normalSp->getContentSize().height));
 					}
 					auto spriteItem = MenuItemSprite::create(normalSp, selectedSp, [this, buildId, panel](Ref*) {
+						SoundManager::playSfxRandom("button_click", 1.0f);
 						startPlacement(buildId);
 						panel->removeFromParent();
 					});
@@ -246,6 +301,7 @@ bool MainScene::init()
 					auto label = Label::createWithSystemFont(StringUtils::format("ID %d", buttonIdx), "Arial", 18);
 					label->setColor(Color3B::BLACK);
 					auto fallbackItem = MenuItemLabel::create(label, [this, buildId, panel](Ref*) {
+						SoundManager::playSfxRandom("button_click", 1.0f);
 						startPlacement(buildId);
 						panel->removeFromParent();
 					});
@@ -272,7 +328,10 @@ bool MainScene::init()
         }
         auto closeLabel = Label::createWithSystemFont("X", "Arial", 28);
         closeLabel->setColor(Color3B::BLACK);
-        auto closeItem = MenuItemLabel::create(closeLabel, [panel](Ref*) { panel->removeFromParent(); });
+        auto closeItem = MenuItemLabel::create(closeLabel, [panel](Ref*) {
+            SoundManager::playSfxRandom("button_click", 1.0f);
+            panel->removeFromParent();
+        });
         closeItem->setPosition(Vec2(origin.x + vs.width - 20.f, origin.y + vs.height - 20.f));
         auto closeMenu = Menu::create(closeItem, nullptr);
         closeMenu->setPosition(Vec2::ZERO);
@@ -782,6 +841,7 @@ void MainScene::updateBuildSystems(float dt)
 
         if (pb.data->buildRemainSec <= 0.0f) {
             // Finish construction/upgrade
+            SoundManager::playSfxRandom("building_finished", 1.0f);
             if (pb.data->buildState == Building::STATE_UPGRADING && pb.data->upgradeTargetLevel > 0) {
                 pb.data->level = pb.data->upgradeTargetLevel;
             }
@@ -1259,6 +1319,7 @@ float delta = ev->getScrollY();
                                 }
                             }
                             else {
+                                playPickupSfxForBuildingId(pb.id);
                                 _moving = true;
                                 _movingIndex = idx;
                                 _hint->clear();
@@ -1274,12 +1335,14 @@ float delta = ev->getScrollY();
                                 }
                             }
                             else {
+                                playPickupSfxForBuildingId(pb.id);
                                 _moving = true;
                                 _movingIndex = idx;
                                 _hint->clear();
                             }
                         }
                         else {
+                            playPickupSfxForBuildingId(pb.id);
                             _moving = true;
                             _movingIndex = idx;
                             _hint->clear();
@@ -1519,6 +1582,10 @@ void MainScene::placeBuilding(int r, int c, int id)
 
     std::shared_ptr<Building> ptr(b.release());
     _buildings.push_back({ id, r, c, s, ptr });
+
+    // SFX: place new building.
+    playPlaceSfxForBuildingId(id);
+
     _saveDirty = true;
 }
 
@@ -1623,6 +1690,10 @@ void MainScene::commitMove(int r, int c)
     if (b.sprite) b.sprite->setPosition(center + off);
     b.r = r; b.c = c;
     redrawOccupied();
+
+    // SFX: place after dragging.
+    playPlaceSfxForBuildingId(b.id);
+
     _saveDirty = true;
 }
 
@@ -2074,6 +2145,7 @@ _attackMask->removeFromParent();
 // =========================
 void MainScene::openTrainingCampPicker(int buildingIndex)
 {
+    SoundManager::playSfxRandom("button_click", 1.0f);
     if (_trainMask) return;
     if (buildingIndex < 0 || buildingIndex >= (int)_buildings.size()) return;
 
@@ -2114,7 +2186,10 @@ void MainScene::openTrainingCampPicker(int buildingIndex)
     // Close button
     auto closeLbl = Label::createWithSystemFont("X", "Arial", 26);
     closeLbl->setColor(Color3B::BLACK);
-    auto closeItem = MenuItemLabel::create(closeLbl, [this](Ref*) { closeTrainingCampPicker(); });
+    auto closeItem = MenuItemLabel::create(closeLbl, [this](Ref*) {
+        SoundManager::playSfxRandom("button_click", 1.0f);
+        closeTrainingCampPicker();
+    });
     closeItem->setPosition(Vec2(panelW - 22.f, panelH - 28.f));
     auto closeMenu = Menu::create(closeItem, nullptr);
     closeMenu->setPosition(Vec2::ZERO);
@@ -2273,6 +2348,7 @@ void MainScene::refreshTrainingCampUI()
         auto minusLbl = Label::createWithSystemFont("-", "Arial", 22);
         minusLbl->setColor(Color3B(40, 40, 40));
         auto minusItem = MenuItemLabel::create(minusLbl, [this, t](Ref*) {
+            SoundManager::playSfxRandom("button_click", 1.0f);
             if (_trainCampIndex < 0 || _trainCampIndex >= (int)_buildings.size()) return;
             auto& pb2 = _buildings[_trainCampIndex];
             if (!pb2.data) return;
@@ -2356,6 +2432,7 @@ void MainScene::refreshTrainingCampUI()
     btn->addChild(lvLbl, 2);
 }
             btn->addClickEventListener([this, t](Ref*) {
+                SoundManager::playSfxRandom("button_click", 1.0f);
                 if (_trainCampIndex < 0 || _trainCampIndex >= (int)_buildings.size()) return;
                 auto& pb2 = _buildings[_trainCampIndex];
                 if (!pb2.data) return;
@@ -2708,6 +2785,7 @@ void MainScene::updateResearchSystems(float dt)
 
 void MainScene::openLaboratoryResearchPicker(int buildingIndex)
 {
+    SoundManager::playSfxRandom("button_click", 1.0f);
     if (_researchMask) return;
     if (buildingIndex < 0 || buildingIndex >= (int)_buildings.size()) return;
 
@@ -2748,7 +2826,10 @@ void MainScene::openLaboratoryResearchPicker(int buildingIndex)
     // Close button
     auto closeLbl = Label::createWithSystemFont("X", "Arial", 26);
     closeLbl->setColor(Color3B::BLACK);
-    auto closeItem = MenuItemLabel::create(closeLbl, [this](Ref*) { closeLaboratoryResearchPicker(); });
+    auto closeItem = MenuItemLabel::create(closeLbl, [this](Ref*) {
+        SoundManager::playSfxRandom("button_click", 1.0f);
+        closeLaboratoryResearchPicker();
+    });
     closeItem->setPosition(Vec2(panelW - 22.f, panelH - 28.f));
     auto closeMenu = Menu::create(closeItem, nullptr);
     closeMenu->setPosition(Vec2::ZERO);
@@ -2942,6 +3023,7 @@ void MainScene::refreshResearchUI()
 
 // Click to start research.
         btn->addClickEventListener([this, type, labFunctional, labLevel](Ref*) {
+            SoundManager::playSfxRandom("button_click", 1.0f);
             if (!labFunctional) {
                 showResearchToast("Laboratory is not ready.");
                 return;

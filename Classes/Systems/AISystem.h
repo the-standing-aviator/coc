@@ -44,6 +44,10 @@ struct EnemyBuildingRuntime {
     // Defense shooting state
     float defenseCooldown = 0.0f;
 
+    // When a non-wall building is destroyed, we keep its sprite and swap it to a ruin texture
+    // (requested behavior). This flag prevents repeated swaps.
+    bool ruinShown = false;
+
     // Loot is collected once when the building is destroyed.
     bool lootCollected = false;
 

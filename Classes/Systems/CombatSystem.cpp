@@ -2,12 +2,45 @@
 
 #include "Patterns/AttackVisitor.h"
 #include "GameObjects/Buildings/DefenseBuilding.h"
+#include "GameObjects/Buildings/ResourceBuilding.h"
 #include "GameObjects/Units/wall_breaker.h"
+#include "Managers/SoundManager.h"
 
 #include <algorithm>
 #include <cmath>
 
 using namespace cocos2d;
+
+static void playUnitHitSfx(const UnitBase& attacker, const Building& target)
+{
+    // Special case: stealing resources sounds override generic attack sounds.
+    if (dynamic_cast<const GoldMine*>(&target) || dynamic_cast<const GoldStorage*>(&target))
+    {
+        SoundManager::playSfxRandom("coin_steal", 1.0f);
+        return;
+    }
+    if (dynamic_cast<const ElixirCollector*>(&target) || dynamic_cast<const ElixirStorage*>(&target))
+    {
+        SoundManager::playSfxRandom("elixir_steal", 1.0f);
+        return;
+    }
+
+    switch (attacker.unitId)
+    {
+    case 2: // archer
+        SoundManager::playSfxRandom("arrow_hit", 1.0f);
+        break;
+    case 3: // giant
+        SoundManager::playSfxRandom("giant_attack", 1.0f);
+        break;
+    case 4: // wall breaker
+        SoundManager::playSfxRandom("wall_breaker_attack", 1.0f);
+        break;
+    default: // barbarian
+        SoundManager::playSfxRandom("barbarian_hit_stuff", 1.0f);
+        break;
+    }
+}
 
 static const char* HPBAR_NAME = "__hpbar";
 static const char* HPFILL_NAME = "__hpfill";
@@ -144,6 +177,9 @@ bool CombatSystem::tryUnitAttackBuilding(UnitBase& attacker,
     if (!isInRange(ap, tp, attacker.attackRange))
         return false;
 
+    // SFX: unit hit / stealing resources.
+    playUnitHitSfx(attacker, target);
+
     int dmg = AttackVisitor::computeDamage(attacker, target);
     target.hp -= dmg;
     if (target.hp < 0) target.hp = 0;
@@ -168,6 +204,9 @@ bool CombatSystem::unitHitBuildingNoRange(UnitBase& attacker,
     if (!attacker.canAttack()) return false;
 
     Vec2 tp = targetSprite->getPosition();
+
+    // SFX: unit hit / stealing resources.
+    playUnitHitSfx(attacker, target);
 
     int dmg = AttackVisitor::computeDamage(attacker, target);
     target.hp -= dmg;
@@ -197,6 +236,9 @@ bool CombatSystem::tryBomberExplode(UnitBase& bomber,
     Vec2 wp = targetWall.sprite->getPosition();
     if (!isInRange(bp, wp, bomber.attackRange))
         return false;
+
+    // SFX: wall breaker explosion/attack.
+    SoundManager::playSfxRandom("wall_breaker_attack", 1.0f);
 
     // Explode: deal high damage to nearby walls, then self-destruct.
     const WallBreaker* wb = dynamic_cast<const WallBreaker*>(&bomber);
@@ -341,6 +383,13 @@ bool CombatSystem::tryDefenseShoot(float dt,
     }
 
     if (best < 0) return false;
+
+    // SFX: defense firing.
+    if (dynamic_cast<ArrowTower*>(&defense)) {
+        SoundManager::playSfxRandom("arrow_hit", 1.0f);
+    } else if (dynamic_cast<Cannon*>(&defense)) {
+        SoundManager::playSfxRandom("cannon_attack", 1.0f);
+    }
 
     int dmg = (int)std::ceil(std::max(1.0f, dmgPerHit));
     auto& victim = units[best];

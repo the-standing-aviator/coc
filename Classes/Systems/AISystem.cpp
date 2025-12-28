@@ -4,6 +4,7 @@
 #include "Systems/Pathfinding.h"
 
 #include "GameObjects/Buildings/DefenseBuilding.h"
+#include "Managers/SoundManager.h"
 
 #include <algorithm>
 #include <cmath>
@@ -735,10 +736,51 @@ void AISystem::updateOneUnit(float dt, BattleUnitRuntime& u,
 
         if (!isValidIndex(u.targetIndex))
         {
-            u.targetIndex = pickTargetIndex(*u.unit, unitCell, enemyBuildings, blockedHard);
-            u.path.clear();
-            u.pathCursor = 0;
-            u.repathCD = 0.0f;
+            // Bomber (WallBreaker): ALWAYS look for the nearest REACHABLE wall.
+            // The old "nearest by distance" rule could pick a wall that has no A* path
+            // (e.g. inner walls), causing the unit to stall.
+            int bestWall = -1;
+            int bestLen = INT_MAX;
+            std::vector<Pathfinding::GridPos> bestPath;
+
+            for (int i = 0; i < (int)enemyBuildings.size(); ++i)
+            {
+                const auto& e = enemyBuildings[i];
+        // NOTE: "isValid" was a leftover identifier and caused a build error on MSVC.
+        // We should validate by index using the local helper.
+        if (!isValidIndex(i) || e.id != 10) continue;
+
+                std::vector<Pathfinding::GridPos> path;
+                if (!buildBestPathForTarget(*u.unit, unitCell, e, blockedHard, path))
+                    continue;
+
+                int len = (int)path.size();
+                if (len < bestLen)
+                {
+                    bestLen = len;
+                    bestWall = i;
+                    bestPath = std::move(path);
+                }
+                if (bestLen <= 2) break;
+            }
+
+            if (bestWall >= 0)
+            {
+                u.targetIndex = bestWall;
+                u.path = std::move(bestPath);
+                u.pathCursor = 0;
+                if (!u.path.empty() && u.path[0].r == unitCell.r && u.path[0].c == unitCell.c)
+                    u.pathCursor = 1;
+                u.repathCD = 0.35f;
+            }
+            else
+            {
+                // Fallback: keep the old distance-based pick rule.
+                u.targetIndex = pickTargetIndex(*u.unit, unitCell, enemyBuildings, blockedHard);
+                u.path.clear();
+                u.pathCursor = 0;
+                u.repathCD = 0.0f;
+            }
         }
 
         if (!isValidIndex(u.targetIndex)) return;
@@ -989,6 +1031,23 @@ void AISystem::cleanup(float dt,
         {
             if (!u.dying)
             {
+                // SFX: troop death (play once when entering dying state).
+                switch (u.unit->unitId)
+                {
+                case 2: // archer
+                    SoundManager::playSfxRandom("archer_death", 1.0f);
+                    break;
+                case 3: // giant
+                    SoundManager::playSfxRandom("giant_death", 1.0f);
+                    break;
+                case 4: // wall breaker
+                    SoundManager::playSfxRandom("wall_breaker_death", 1.0f);
+                    break;
+                default: // barbarian
+                    SoundManager::playSfxRandom("barbarian_death", 1.0f);
+                    break;
+                }
+
                 u.dying = true;
                 u.dyingTimer = 0.30f;
 
@@ -1014,20 +1073,53 @@ void AISystem::cleanup(float dt,
         }
     }
 
-    // Buildings death animation (sprite only)
+    // Buildings death behavior:
+    // - Non-wall buildings: keep the sprite and swap it to a ruin texture (requested).
+    // - Walls: keep the old fade-out + remove behavior.
     for (auto& e : enemyBuildings)
     {
         if (!e.building || !e.sprite) continue;
         if (e.building->hp > 0) continue;
 
+        // Non-wall -> show ruin and keep it.
+        if (e.id != 10)
+        {
+            if (!e.ruinShown)
+            {
+                // SFX: building destroyed (play once).
+                SoundManager::playSfxRandom("building_destroyed", 1.0f);
+                e.ruinShown = true;
+                e.sprite->stopAllActions();
+                e.sprite->setOpacity(255);
+
+                // Remove HP bar if it exists.
+                e.sprite->removeChildByName("__hpbar");
+
+                // Swap to ruin texture. Keep original transform (pos/scale/rotation).
+                auto tex = cocos2d::Director::getInstance()->getTextureCache()->addImage("ruin.png");
+                if (tex)
+                {
+                    e.sprite->setTexture(tex);
+                    cocos2d::Size ts = tex->getContentSize();
+                    e.sprite->setTextureRect(cocos2d::Rect(0, 0, ts.width, ts.height));
+                }
+                // Mark as "handled" so the wall-only death animation below won't run.
+                e.dying = true;
+            }
+            continue;
+        }
+
+        // Wall -> old fade-out behavior.
         if (!e.dying)
         {
+            // SFX: wall destroyed (reuse the same destroyed sound).
+            SoundManager::playSfxRandom("building_destroyed", 1.0f);
             e.dying = true;
             e.dyingTimer = 0.35f;
             e.sprite->stopAllActions();
-            e.sprite->runAction(Spawn::create(
-                FadeOut::create(0.35f),
-                ScaleTo::create(0.35f, e.sprite->getScaleX() * 0.7f, e.sprite->getScaleY() * 0.7f),
+            e.sprite->runAction(cocos2d::Spawn::create(
+                cocos2d::FadeOut::create(0.35f),
+                cocos2d::ScaleTo::create(0.35f, e.sprite->getScaleX() * 0.7f, e.sprite->getScaleY() * 0.7f),
                 nullptr
             ));
         }
