@@ -2,39 +2,49 @@
 
 #include "Patterns/AttackVisitor.h"
 #include "GameObjects/Buildings/DefenseBuilding.h"
+#include "GameObjects/Buildings/ResourceBuilding.h"
+#include "GameObjects/Units/wall_breaker.h"
+#include "Managers/SoundManager.h"
 
 #include <algorithm>
 #include <cmath>
 
 using namespace cocos2d;
 
+static void playUnitHitSfx(const UnitBase& attacker, const Building& target)
+{
+    // Special case: stealing resources sounds override generic attack sounds.
+    if (dynamic_cast<const GoldMine*>(&target) || dynamic_cast<const GoldStorage*>(&target))
+    {
+        SoundManager::playSfxRandom("coin_steal", 1.0f);
+        return;
+    }
+    if (dynamic_cast<const ElixirCollector*>(&target) || dynamic_cast<const ElixirStorage*>(&target))
+    {
+        SoundManager::playSfxRandom("elixir_steal", 1.0f);
+        return;
+    }
+
+    switch (attacker.unitId)
+    {
+    case 2: // archer
+        SoundManager::playSfxRandom("arrow_hit", 1.0f);
+        break;
+    case 3: // giant
+        SoundManager::playSfxRandom("giant_attack", 1.0f);
+        break;
+    case 4: // wall breaker
+        SoundManager::playSfxRandom("wall_breaker_attack", 1.0f);
+        break;
+    default: // barbarian
+        SoundManager::playSfxRandom("barbarian_hit_stuff", 1.0f);
+        break;
+    }
+}
+
 static const char* HPBAR_NAME = "__hpbar";
 static const char* HPFILL_NAME = "__hpfill";
 static const char* HPBG_NAME = "__hpbg";
-
-int CombatSystem::getBuildingPriority(int buildingId)
-{
-    // Default priority: defenses > townhall > others > wall
-    if (buildingId == 1 || buildingId == 2) return 0;
-    if (buildingId == 9) return 1;
-    if (buildingId == 10) return 4;
-    return 2;
-}
-
-int CombatSystem::getBuildingPriorityForUnit(const UnitBase& unit, int buildingId, bool defensesExist)
-{
-    int base = getBuildingPriority(buildingId);
-
-    // Giant preference example:
-    // Giant (unitId==3) strongly prefers defenses if any exist.
-    if (unit.unitId == 3 && defensesExist)
-    {
-        if (buildingId == 1 || buildingId == 2) return 0;     // keep top
-        return base + 5;                                      // de-prioritize non-defense
-    }
-
-    return base;
-}
 
 bool CombatSystem::isInRange(const Vec2& a, const Vec2& b, float range)
 {
@@ -88,29 +98,29 @@ void CombatSystem::ensureHpBar(Sprite* sprite, int hp, int hpMax, bool isUnit)
     LayerColor* bg = nullptr;
     LayerColor* fill = nullptr;
 
-    // ¸üÐ¡Ò»µã
+    // Â¸Ã¼ÃÂ¡Ã’Â»ÂµÃ£
     const float w = isUnit ? 40.0f : 48.0f;
     const float h = 5.0f;
     const float pad = 1.0f;
 
-    // ¡ï¹Ø¼ü£ºÓÃÃªµã×÷Îª»ù×¼£¬±£Ö¤¡°¾«×¼ÔÚµ¥Î»½ÅÏÂ¡±
-    Vec2 ap = sprite->getAnchorPointInPoints();          // ÃªµãÔÚ sprite ±¾µØ×ø±êÖÐµÄÎ»ÖÃ
-    float gapUnder = 7.0f;                               // Äã¿ÉÒÔÎ¢µ÷£º6~12 ¶¼ÐÐ
-    float yUnit = ap.y - (h * 0.5f + gapUnder);          // µ¥Î»ÑªÌõ£ºÃªµãÕýÏÂ·½
-    float yBuilding = sprite->getContentSize().height + 12.0f; // ½¨Öþ£ºÈÔÔÚÉÏ·½
+    // Â¡Ã¯Â¹Ã˜Â¼Ã¼Â£ÂºÃ“ÃƒÃƒÂªÂµÃ£Ã—Ã·ÃŽÂªÂ»Ã¹Ã—Â¼Â£Â¬Â±Â£Ã–Â¤Â¡Â°Â¾Â«Ã—Â¼Ã”ÃšÂµÂ¥ÃŽÂ»Â½Ã…ÃÃ‚Â¡Â±
+    Vec2 ap = sprite->getAnchorPointInPoints();          // ÃƒÂªÂµÃ£Ã”Ãš sprite Â±Â¾ÂµÃ˜Ã—Ã¸Â±ÃªÃ–ÃÂµÃ„ÃŽÂ»Ã–Ãƒ
+    float gapUnder = 7.0f;                               // Ã„Ã£Â¿Ã‰Ã’Ã”ÃŽÂ¢ÂµÃ·Â£Âº6~12 Â¶Â¼ÃÃ
+    float yUnit = ap.y - (h * 0.5f + gapUnder);          // ÂµÂ¥ÃŽÂ»Ã‘ÂªÃŒÃµÂ£ÂºÃƒÂªÂµÃ£Ã•Ã½ÃÃ‚Â·Â½
+    float yBuilding = sprite->getContentSize().height + 12.0f; // Â½Â¨Ã–Ã¾Â£ÂºÃˆÃ”Ã”ÃšÃ‰ÃÂ·Â½
 
     if (!bar)
     {
         bar = Node::create();
         bar->setName(HPBAR_NAME);
 
-        // ÑªÌõ´óÐ¡²»Ëæ sprite Ëõ·Å±ä»¯
+        // Ã‘ÂªÃŒÃµÂ´Ã³ÃÂ¡Â²Â»Ã‹Ã¦ sprite Ã‹ÃµÂ·Ã…Â±Ã¤Â»Â¯
         float sx = std::max(0.001f, sprite->getScaleX());
         float sy = std::max(0.001f, sprite->getScaleY());
         bar->setScaleX(1.0f / sx);
         bar->setScaleY(1.0f / sy);
 
-        // ¡ï¶¨Î»£ºµ¥Î»½ÅÏÂ / ½¨ÖþÉÏ·½
+        // Â¡Ã¯Â¶Â¨ÃŽÂ»Â£ÂºÂµÂ¥ÃŽÂ»Â½Ã…ÃÃ‚ / Â½Â¨Ã–Ã¾Ã‰ÃÂ·Â½
         bar->setPosition(Vec2(std::round(ap.x), std::round(isUnit ? yUnit : yBuilding)));
         sprite->addChild(bar, 999);
 
@@ -132,7 +142,7 @@ void CombatSystem::ensureHpBar(Sprite* sprite, int hp, int hpMax, bool isUnit)
     }
     else
     {
-        // ¡ïÈç¹û sprite Ãªµã/³ß´ç²»Í¬£¬ÔËÐÐÊ±Ò²¸ú×ÅÖØÐÂ¶¨Î»Ò»´Î£¨±£³Ö¾«×¼£©
+        // Â¡Ã¯ÃˆÃ§Â¹Ã» sprite ÃƒÂªÂµÃ£/Â³ÃŸÂ´Ã§Â²Â»ÃÂ¬Â£Â¬Ã”Ã‹ÃÃÃŠÂ±Ã’Â²Â¸ÃºÃ—Ã…Ã–Ã˜ÃÃ‚Â¶Â¨ÃŽÂ»Ã’Â»Â´ÃŽÂ£Â¨Â±Â£Â³Ã–Â¾Â«Ã—Â¼Â£Â©
         bar->setPosition(Vec2(std::round(ap.x), std::round(isUnit ? yUnit : yBuilding)));
 
         bg = dynamic_cast<LayerColor*>(bar->getChildByName(HPBG_NAME));
@@ -145,7 +155,7 @@ void CombatSystem::ensureHpBar(Sprite* sprite, int hp, int hpMax, bool isUnit)
     pct = std::max(0.0f, std::min(1.0f, pct));
     fill->setScaleX(pct);
 
-    // ÈÔ±£Áô£º½¨ÖþÂúÑªÒþ²Ø£¨ÄãÒ²¿ÉÒÔ¸Ä³ÉÒ»Ö±ÏÔÊ¾£©
+    // ÃˆÃ”Â±Â£ÃÃ´Â£ÂºÂ½Â¨Ã–Ã¾Ã‚ÃºÃ‘ÂªÃ’Ã¾Â²Ã˜Â£Â¨Ã„Ã£Ã’Â²Â¿Ã‰Ã’Ã”Â¸Ã„Â³Ã‰Ã’Â»Ã–Â±ÃÃ”ÃŠÂ¾Â£Â©
     if (!isUnit) bar->setVisible(pct < 0.999f);
     else bar->setVisible(true);
 }
@@ -167,6 +177,9 @@ bool CombatSystem::tryUnitAttackBuilding(UnitBase& attacker,
     if (!isInRange(ap, tp, attacker.attackRange))
         return false;
 
+    // SFX: unit hit / stealing resources.
+    playUnitHitSfx(attacker, target);
+
     int dmg = AttackVisitor::computeDamage(attacker, target);
     target.hp -= dmg;
     if (target.hp < 0) target.hp = 0;
@@ -178,6 +191,32 @@ bool CombatSystem::tryUnitAttackBuilding(UnitBase& attacker,
     ensureHpBar(targetSprite, target.hp, target.hpMax, false);
     showDamage(targetSprite->getParent(), tp, dmg);
 
+    return true;
+}
+
+bool CombatSystem::unitHitBuildingNoRange(UnitBase& attacker,
+    Sprite* attackerSprite,
+    Building& target,
+    Sprite* targetSprite)
+{
+    if (!attackerSprite || !targetSprite) return false;
+    if (attacker.isDead() || target.hp <= 0) return false;
+    if (!attacker.canAttack()) return false;
+
+    Vec2 tp = targetSprite->getPosition();
+
+    // SFX: unit hit / stealing resources.
+    playUnitHitSfx(attacker, target);
+
+    int dmg = AttackVisitor::computeDamage(attacker, target);
+    target.hp -= dmg;
+    if (target.hp < 0) target.hp = 0;
+
+    attacker.startAttackCooldown();
+
+    punchScale(targetSprite, 12345);
+    ensureHpBar(targetSprite, target.hp, target.hpMax, false);
+    showDamage(targetSprite->getParent(), tp, dmg);
     return true;
 }
 
@@ -198,30 +237,88 @@ bool CombatSystem::tryBomberExplode(UnitBase& bomber,
     if (!isInRange(bp, wp, bomber.attackRange))
         return false;
 
-    // explode!
+    // SFX: wall breaker explosion/attack.
+    SoundManager::playSfxRandom("wall_breaker_attack", 1.0f);
+
+    // Explode: deal high damage to nearby walls, then self-destruct.
+    const WallBreaker* wb = dynamic_cast<const WallBreaker*>(&bomber);
+    int multiplier = wb ? wb->wallDamageMultiplier : 40;
+    float radiusTiles = wb ? wb->damageRadiusTiles : 2.0f;
+    int wallDmg = std::max(1, bomber.damage * multiplier);
+
     int tr = targetWall.r;
     int tc = targetWall.c;
 
-    // Destroy 3x3 walls centered at (tr,tc)
     for (auto& e : enemyBuildings)
     {
-        if (!e.building || e.building->hp <= 0) continue;
+        if (!e.building || e.building->hp <= 0 || !e.sprite) continue;
         if (e.id != 10) continue;
-        if (std::abs(e.r - tr) <= 1 && std::abs(e.c - tc) <= 1)
-        {
-            e.building->hp = 0;
-            if (e.sprite)
-            {
-                punchScale(e.sprite, 22345);
-                ensureHpBar(e.sprite, e.building->hp, e.building->hpMax, false);
-            }
-        }
+
+        float dr = (float)(e.r - tr);
+        float dc = (float)(e.c - tc);
+        float dist = std::sqrt(dr * dr + dc * dc);
+        if (dist > radiusTiles + 0.001f) continue;
+
+        e.building->hp -= wallDmg;
+        if (e.building->hp < 0) e.building->hp = 0;
+
+        punchScale(e.sprite, 22345);
+        ensureHpBar(e.sprite, e.building->hp, e.building->hpMax, false);
+        showDamage(e.sprite->getParent(), e.sprite->getPosition(), wallDmg);
     }
 
     // self-destruct
     bomber.hp = 0;
 
     // small visual cue (placeholder)
+    showDamage(bomberSprite->getParent(), bp, 999);
+    bomber.startAttackCooldown();
+    return true;
+}
+
+bool CombatSystem::bomberExplodeNoRange(UnitBase& bomber,
+    Sprite* bomberSprite,
+    EnemyBuildingRuntime& targetWall,
+    std::vector<EnemyBuildingRuntime>& enemyBuildings)
+{
+    if (!bomberSprite || !targetWall.sprite || !targetWall.building) return false;
+    if (bomber.isDead()) return false;
+    if (targetWall.building->hp <= 0) return false;
+    if (targetWall.id != 10) return false;
+
+    if (!bomber.canAttack()) return false;
+
+    // Reuse the same explode logic as tryBomberExplode, but WITHOUT any range check.
+    const WallBreaker* wb = dynamic_cast<const WallBreaker*>(&bomber);
+    int multiplier = wb ? wb->wallDamageMultiplier : 40;
+    float radiusTiles = wb ? wb->damageRadiusTiles : 2.0f;
+    int wallDmg = std::max(1, bomber.damage * multiplier);
+
+    int tr = targetWall.r;
+    int tc = targetWall.c;
+
+    for (auto& e : enemyBuildings)
+    {
+        if (!e.building || e.building->hp <= 0 || !e.sprite) continue;
+        if (e.id != 10) continue;
+
+        float dr = (float)(e.r - tr);
+        float dc = (float)(e.c - tc);
+        float dist = std::sqrt(dr * dr + dc * dc);
+        if (dist > radiusTiles + 0.001f) continue;
+
+        e.building->hp -= wallDmg;
+        if (e.building->hp < 0) e.building->hp = 0;
+
+        punchScale(e.sprite, 22345);
+        ensureHpBar(e.sprite, e.building->hp, e.building->hpMax, false);
+        showDamage(e.sprite->getParent(), e.sprite->getPosition(), wallDmg);
+    }
+
+    // self-destruct
+    bomber.hp = 0;
+
+    Vec2 bp = bomberSprite->getPosition();
     showDamage(bomberSprite->getParent(), bp, 999);
     bomber.startAttackCooldown();
     return true;
@@ -286,6 +383,13 @@ bool CombatSystem::tryDefenseShoot(float dt,
     }
 
     if (best < 0) return false;
+
+    // SFX: defense firing.
+    if (dynamic_cast<ArrowTower*>(&defense)) {
+        SoundManager::playSfxRandom("arrow_hit", 1.0f);
+    } else if (dynamic_cast<Cannon*>(&defense)) {
+        SoundManager::playSfxRandom("cannon_attack", 1.0f);
+    }
 
     int dmg = (int)std::ceil(std::max(1.0f, dmgPerHit));
     auto& victim = units[best];

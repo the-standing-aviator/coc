@@ -11,5 +11,6 @@
 class Barbarian : public UnitBase {
 public:
     Barbarian();
+    void applyLevel(int lvl);
     virtual ~Barbarian() = default;
 };

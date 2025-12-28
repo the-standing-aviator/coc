@@ -56,31 +56,29 @@ namespace UnitFactory {
 
     std::unique_ptr<UnitBase> create(int unitId, int level)
     {
-        // NOTE: level scaling is kept minimal for now.
-        // You can later read JSON config and apply multipliers by level.
         switch (unitId)
         {
         case 1: {
             auto u = std::make_unique<Barbarian>();
-            u->level = level;
+            u->applyLevel(level);
             u->reset(); // ensure full hp + cooldown reset
             return u;
         }
         case 2: {
             auto u = std::make_unique<Archer>();
-            u->level = level;
+            u->applyLevel(level);
             u->reset();
             return u;
         }
         case 3: {
             auto u = std::make_unique<Giant>();
-            u->level = level;
+            u->applyLevel(level);
             u->reset();
             return u;
         }
         case 4: {
             auto u = std::make_unique<WallBreaker>();
-            u->level = level;
+            u->applyLevel(level);
             u->reset();
             return u;
         }

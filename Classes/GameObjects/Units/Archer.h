@@ -11,5 +11,6 @@
 class Archer : public UnitBase {
 public:
     Archer();
+    void applyLevel(int lvl);
     virtual ~Archer() = default;
 };

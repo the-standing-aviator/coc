@@ -23,6 +23,12 @@ struct SaveBuilding
     int c = 0;
     int hp = 0;
     float stored = 0.0f;
+
+    // Build/upgrade persistence
+    int buildState = 0;          // Building::BuildState
+    float buildTotalSec = 0.0f;  // total seconds
+    float buildRemainSec = 0.0f; // remaining seconds
+    int upgradeTargetLevel = 0;  // if upgrading
 };
 
 
@@ -45,6 +51,16 @@ struct SaveData
     std::vector<SaveBuilding> buildings;
     std::vector<SaveTrainedTroop> trainedTroops;
 
+    // Troop levels (research results). Key is UnitFactory unitId (1..4).
+    std::unordered_map<int, int> troopLevels;
+
+    // Laboratory research state (only one research at a time).
+    int researchUnitId = 0;
+    int researchTargetLevel = 0;
+    float researchTotalSec = 0.0f;
+    float researchRemainSec = 0.0f;
+
+
 };
 
 class SaveSystem
@@ -59,6 +75,10 @@ public:
     // READY troops passed from MainScene to BattleScene.
     static void setBattleReadyTroops(const std::unordered_map<int, int>& troops);
     static const std::unordered_map<int, int>& getBattleReadyTroops();
+
+    // Troop levels passed from MainScene to BattleScene.
+    static void setBattleTroopLevels(const std::unordered_map<int, int>& levels);
+    static const std::unordered_map<int, int>& getBattleTroopLevels();
 
     static std::string getSaveDir();
     static std::string getSavePath(int slot);
@@ -75,4 +95,5 @@ private:
     static int s_currentSlot;
     static int s_battleTargetSlot;
     static std::unordered_map<int, int> s_battleReadyTroops;
+    static std::unordered_map<int, int> s_battleTroopLevels;
 };

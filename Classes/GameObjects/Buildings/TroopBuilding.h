@@ -63,32 +63,33 @@ public:
     // Troop housing sizes
     static int getTroopHousing(TroopType t) {
         switch (t) {
-        case TROOP_BARBARIAN:   return 1;
-        case TROOP_ARCHER:      return 1;
-        case TROOP_GIANT:       return 5;
-        case TROOP_WALLBREAKER: return 2;
-        default:                return 1;
+            case TROOP_BARBARIAN:   return 1;
+            case TROOP_ARCHER:      return 1;
+            // Giant uses 5 housing.
+            case TROOP_GIANT:       return 5;
+            case TROOP_WALLBREAKER: return 2;
+            default:                return 1;
         }
     }
 
     // UI icons
     static const char* getTroopIcon(TroopType t) {
         switch (t) {
-        case TROOP_BARBARIAN:   return "ui/barbarian_choose_button.png";
-        case TROOP_ARCHER:      return "ui/archer_choose_button.png";
-        case TROOP_GIANT:       return "ui/giant_choose_buuton.png";
-        case TROOP_WALLBREAKER: return "ui/wallbreaker_choose_button.png";
-        default:                return "ui/barbarian_choose_button.png";
+            case TROOP_BARBARIAN:   return "ui/barbarian_choose_button.png";
+            case TROOP_ARCHER:      return "ui/archer_choose_button.png";
+            case TROOP_GIANT:       return "ui/giant_choose_buuton.png";
+            case TROOP_WALLBREAKER: return "ui/wallbreaker_choose_button.png";
+            default:                return "ui/barbarian_choose_button.png";
         }
     }
 
     static int getUnlockLevel(TroopType t) {
         switch (t) {
-        case TROOP_BARBARIAN:   return 1;
-        case TROOP_ARCHER:      return 2;
-        case TROOP_GIANT:       return 3;
-        case TROOP_WALLBREAKER: return 4;
-        default:                return 1;
+            case TROOP_BARBARIAN:   return 1;
+            case TROOP_ARCHER:      return 2;
+            case TROOP_GIANT:       return 3;
+            case TROOP_WALLBREAKER: return 4;
+            default:                return 1;
         }
     }
 
@@ -158,4 +159,17 @@ public:
 
 private:
     std::unordered_map<int, int> readyTroops; // troop type -> ready count
+};
+
+// Laboratory - currently only provides upgradeable HP/build timing/cost like other buildings.
+// In future it can be used to unlock/upgrade troops.
+class Laboratory : public Building {
+public:
+    Laboratory() { image = "buildings/building11L1.png"; }
+
+    void setupStats(int level) {
+        auto st = ConfigManager::getLaboratoryStats(level);
+        hpMax = st.hp;
+        if (hp > hpMax) hp = hpMax;
+    }
 };

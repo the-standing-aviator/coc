@@ -1,4 +1,4 @@
-ï»¿#pragma once
+#pragma once
 #include <functional>
 
 struct Resources {
@@ -33,9 +33,9 @@ public:
     static bool spendPopulation(int v);
     static void reset();
     static void onChanged(const std::function<void(const Resources&)>& cb);
-    // ÃˆÃ‹Â¿ÃšÃˆÃÃÂ¿Â¹ÃœÃ€Ã­
+    // ÈË¿ÚÈİÁ¿¹ÜÀí
     static void addPopulationCap(int amount);
-
+   
 private:
     static void notify();
     static Resources _res;

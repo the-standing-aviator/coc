@@ -8,12 +8,6 @@
 
 namespace CombatSystem {
 
-    // Base building priority (smaller = higher priority)
-    int getBuildingPriority(int buildingId);
-
-    // Per-unit building priority (e.g. Giant prefers defenses)
-    int getBuildingPriorityForUnit(const UnitBase& unit, int buildingId, bool defensesExist);
-
     // Range check
     bool isInRange(const cocos2d::Vec2& a, const cocos2d::Vec2& b, float range);
 
@@ -27,11 +21,25 @@ namespace CombatSystem {
         Building& target,
         cocos2d::Sprite* targetSprite);
 
-    // Bomber special:
+    // Unit hits a building WITHOUT any range check.
+    // AISystem is responsible for deciding whether the unit is in range.
+    bool unitHitBuildingNoRange(UnitBase& attacker,
+        cocos2d::Sprite* attackerSprite,
+        Building& target,
+        cocos2d::Sprite* targetSprite);
+
+    // WallBreaker special:
     // - Target must be a wall (id==10)
-    // - When bomber reaches attack range, it destroys a 3x3 wall area centered at that wall
-    //   and then self-destructs.
+    // - When it reaches attack range, it deals high damage to nearby walls
+    //   (radius is defined in WallBreaker stats) and then self-destructs.
     bool tryBomberExplode(UnitBase& bomber,
+        cocos2d::Sprite* bomberSprite,
+        EnemyBuildingRuntime& targetWall,
+        std::vector<EnemyBuildingRuntime>& enemyBuildings);
+
+    // Bomber explodes WITHOUT any range check.
+    // AISystem is responsible for deciding whether the bomber is in range.
+    bool bomberExplodeNoRange(UnitBase& bomber,
         cocos2d::Sprite* bomberSprite,
         EnemyBuildingRuntime& targetWall,
         std::vector<EnemyBuildingRuntime>& enemyBuildings);

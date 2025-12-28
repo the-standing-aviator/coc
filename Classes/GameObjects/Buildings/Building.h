@@ -15,6 +15,26 @@ public:
     float stored = 0.f;
     int chunkMinutes = 0;
     std::string image;
+
+    // Build / upgrade state.
+    // STATE_NORMAL: building is fully functional.
+    // STATE_CONSTRUCTING: building is being constructed (no function).
+    // STATE_UPGRADING: building is upgrading (no function).
+    // NOTE: Walls are treated as instant by game logic (no timer).
+    enum BuildState {
+        STATE_NORMAL = 0,
+        STATE_CONSTRUCTING = 1,
+        STATE_UPGRADING = 2,
+    };
+    int buildState = STATE_NORMAL;
+    float buildTotalSec = 0.0f;
+    float buildRemainSec = 0.0f;
+    int upgradeTargetLevel = 0; // only used when buildState == STATE_UPGRADING
+
+    bool isFunctional() const {
+        return buildState == STATE_NORMAL || buildTotalSec <= 0.0f || buildRemainSec <= 0.0f;
+    }
+
     virtual cocos2d::Sprite* createSprite() const {
         auto s = cocos2d::Sprite::create(image);
         if (!s) {
@@ -36,7 +56,7 @@ public:
         lvl->setColor(cocos2d::Color3B::BLACK);
         lvl->enableOutline(cocos2d::Color4B::WHITE, 2);
         lvl->setPosition(cocos2d::Vec2(s->getContentSize().width * 0.5f,
-            s->getContentSize().height * 0.55f));
+                                       s->getContentSize().height * 0.55f));
         s->addChild(lvl, 99);
 
         return s;
@@ -44,6 +64,8 @@ public:
 };
 
 namespace BuildingFactory {
-    std::unique_ptr<Building> create(int id, int level);
-    void applyStats(Building* b, int id, int level);
+    // applyCaps: whether this building should contribute capacity changes immediately.
+    // resetStored: whether producer stored resources should be reset to 0 (use for brand-new buildings).
+    std::unique_ptr<Building> create(int id, int level, bool applyCaps = true, bool resetStored = true);
+    void applyStats(Building* b, int id, int level, bool applyCaps = true, bool resetStored = false);
 }

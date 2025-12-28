@@ -32,8 +32,14 @@ public:
     int hp = 1;
     int damage = 1;
     float attackInterval = 1.0f;  // seconds per hit
-    float attackRange = 20.0f;    // pixels
-    float moveSpeed = 60.0f;      // pixels per second
+    // NOTE: Design tables usually give range/speed in "tiles".
+    // We store those raw values too, then BattleScene converts them into pixels
+    // based on the current isometric tile size.
+    float attackRangeTiles = 0.4f;   // tiles
+    float moveSpeedStat = 18.0f;     // movement speed stat (tiles-based, CoC-style)
+
+    float attackRange = 20.0f;       // pixels (computed from attackRangeTiles)
+    float moveSpeed = 60.0f;         // pixels per second (computed from moveSpeedStat)
 
     // Training-related stats
     int housingSpace = 1;

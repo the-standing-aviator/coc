@@ -24,6 +24,17 @@ public:
     void setTimeScale(float s);
     virtual void onExit() override;
 private:
+    // Generic toast message in main village.
+    void showMainToast(const std::string& msg);
+
+    // Builder limit: only 2 buildings can be constructing/upgrading simultaneously (walls ignored).
+    int getActiveBuilderCount() const;
+
+    // Build/upgrade timer UI (countdown + progress bar above building sprite).
+    void attachBuildTimerUI(cocos2d::Sprite* sprite, float totalSec, float remainSec);
+    void updateBuildTimerUI(cocos2d::Sprite* sprite, float totalSec, float remainSec);
+    void removeBuildTimerUI(cocos2d::Sprite* sprite);
+    void updateBuildSystems(float dt);
     struct StandTroopInfo
     {
         int type = 0;               // TrainingCamp::TroopType (1..4)
@@ -142,4 +153,31 @@ private:
     cocos2d::EventListenerMouse* _trainMouseListener = nullptr;
     int _trainCampIndex = -1;
     int _trainLastSig = 0;
+
+
+    // ===== Troop levels & research =====
+    int getTroopLevel(int unitId) const;
+    void setTroopLevel(int unitId, int level);
+    int getLaboratoryMaxTroopLevel(int labLevel, int unitId) const;
+    void updateResearchSystems(float dt);
+
+    // Laboratory UI (Research window)
+    void openLaboratoryResearchPicker(int buildingIndex);
+    void closeLaboratoryResearchPicker();
+    void refreshResearchUI();
+    void showResearchToast(const std::string& msg);
+
+    std::unordered_map<int, int> _troopLevels;
+    int _activeResearchUnitId = 0;
+    int _activeResearchTargetLevel = 0;
+    float _activeResearchTotalSec = 0.0f;
+    float _activeResearchRemainSec = 0.0f;
+
+    cocos2d::LayerColor* _researchMask = nullptr;
+    cocos2d::Node* _researchPanel = nullptr;
+    cocos2d::Node* _researchSelectRow = nullptr;
+    cocos2d::EventListenerMouse* _researchMouseListener = nullptr;
+    int _researchLabIndex = -1;
+    int _researchLastSig = 0;
+
 };

@@ -15,34 +15,8 @@ public:
     float damageRadiusTiles = 2.0f;
     int deathDamage = 6; // damage when destroyed (reference)
 
-    WallBreaker()
-    {
-        unitId = 4;
-        name = "WallBreaker";
-
-        // Level 1 (reference):
-        // Housing Space: 2
-        // Attack Speed: 1s
-        // Damage: 10 (normal), Damage vs Walls: 400 (x40)
-        // Hitpoints: 20
-        hpMax = 20;
-        hp = hpMax;
-
-        damage = 10;
-        attackInterval = 1.0f;
-
-        // Melee-ish range. Approximate.
-        attackRange = 64.0f;
-
-        // Fast movement (pixel-based approximation)
-        moveSpeed = 95.0f;
-
-        housingSpace = 2;
-        costElixir = 0;
-        trainingTimeSec = 0;
-
-        image = "wall_breaker/wall_breaker_stand.png"; // Optional: change to your actual resource path
-    }
+    WallBreaker();
+    void applyLevel(int lvl);
 
     virtual ~WallBreaker() = default;
 };

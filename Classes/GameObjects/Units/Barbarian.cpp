@@ -1,5 +1,7 @@
 #include "GameObjects/Units/Barbarian.h"
 
+#include <algorithm>
+
 // NOTE:
 // These stats are "good enough" placeholders for your current milestone.
 // If later you add JSON configs, you can move these numbers into Configs/*.json
@@ -10,21 +12,33 @@ Barbarian::Barbarian()
     unitId = 1;
     name = "Barbarian";
 
-    // Default lvl1 stats (CoC-style placeholders)
-    hpMax = 45;
+    // Resource path (adjust if your folder name differs)
+    image = "barbarian/barbarian_stand.png";
+
+    // Apply default level
+    applyLevel(1);
+}
+
+void Barbarian::applyLevel(int lvl)
+{
+    // Reference table (Lv1~5):
+    // DPS = Damage per attack (attack speed is 1s)
+    static const int kHp[5] = { 45, 54, 65, 85, 105 };
+    static const int kDmg[5] = { 9, 12, 15, 18, 23 };
+
+    lvl = std::max(1, std::min(5, lvl));
+    level = lvl;
+
+    hpMax = kHp[lvl - 1];
     hp = hpMax;
-    damage = 9;  // Level 1: 9 damage per hit (CoC reference)
+    damage = kDmg[lvl - 1];
     attackInterval = 1.0f;
-    attackRange = 24.0f;   // melee range (pixels)
-    moveSpeed = 70.0f;
+
+    // From reference: range 0.4 tiles, movement speed 18
+    attackRangeTiles = 0.4f;
+    moveSpeedStat = 18.0f;
 
     housingSpace = 1;
-    costElixir = 25;
-    trainingTimeSec = 20;
-
-    // If you don't have this path, change it to your real troop texture.
-    // Example alternatives:
-    //   "Textures/Troops/barbarian.png"
-    //   "barbarian.png"
-    image = "barbarian/barbarian_stand.png";
+    costElixir = 0;
+    trainingTimeSec = 0;
 }
