@@ -1,5 +1,3 @@
-// File: AISystem.cpp
-// Brief: Implements the AISystem component.
 #include "Systems/AISystem.h"
 
 #include "Systems/CombatSystem.h"

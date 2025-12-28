@@ -41,21 +41,21 @@ public:
     // Handles an event callback.
     virtual void onExit() override;
 private:
-    
+
     // TODO: Add a brief description.
-    
+
     void showMainToast(const std::string& msg);
 
-    
+
     // Returns the ActiveBuilderCount.
 
-    
+
     int getActiveBuilderCount() const;
 
-    
+
     // TODO: Add a brief description.
 
-    
+
     void attachBuildTimerUI(cocos2d::Sprite* sprite, float totalSec, float remainSec);
     // Updates the object state.
     void updateBuildTimerUI(cocos2d::Sprite* sprite, float totalSec, float remainSec);
@@ -66,10 +66,10 @@ private:
     // StandTroopInfo encapsulates related behavior and state.
     struct StandTroopInfo
     {
-        int type = 0;               
+        int type = 0;
         int r = 0;
         int c = 0;
-        cocos2d::Sprite* sprite = nullptr; 
+        cocos2d::Sprite* sprite = nullptr;
     };
 
     // Removes an item.
@@ -106,9 +106,12 @@ private:
     cocos2d::DrawNode* _grid = nullptr;
     cocos2d::Sprite* _background = nullptr;
     cocos2d::Node* _world = nullptr;
-    
+
+    std::vector<std::string> _backgroundOptions;
+    size_t _backgroundIndex = 0;
+
     cocos2d::Node* _standTroopLayer = nullptr;
-    std::vector<StandTroopInfo> _standTroops; 
+    std::vector<StandTroopInfo> _standTroops;
 
     float _zoom = 1.0f;
     float _minZoom = 0.6f;
@@ -145,7 +148,7 @@ private:
     std::vector<float> _buildingScaleById;
     std::vector<cocos2d::Vec2> _buildingOffsetById;
 
-// Sets the ResourceUiScale.
+    // Sets the ResourceUiScale.
 
 public:
     void setResourceUiScale(float s);
@@ -164,10 +167,10 @@ private:
 
     cocos2d::MenuItemImage* _battleButton = nullptr;
 
-// TODO: Add a brief description.
+    // TODO: Add a brief description.
 
 private:
-    
+
     void openEscMenu();
     // TODO: Add a brief description.
     void closeEscMenu();
@@ -176,9 +179,9 @@ private:
 
     cocos2d::LayerColor* _escMask = nullptr;
     cocos2d::LayerColor* _settingsMask = nullptr;
-    
+
     // Loads data from storage.
-    
+
     void loadFromCurrentSaveOrCreate();
     // Saves data to storage.
     void saveToCurrentSlot(bool force);
@@ -188,10 +191,10 @@ private:
     bool _saveDirty = false;
     float _autosaveTimer = 0.0f;
 
-    
+
     // TODO: Add a brief description.
 
-    
+
     void openAttackTargetPicker();
     // TODO: Add a brief description.
     void closeAttackTargetPicker();
@@ -201,10 +204,10 @@ private:
     cocos2d::Node* _attackContent = nullptr;
     cocos2d::EventListenerMouse* _attackMouseListener = nullptr;
 
-    
+
     // TODO: Add a brief description.
 
-    
+
     void openTrainingCampPicker(int buildingIndex);
     // TODO: Add a brief description.
     void closeTrainingCampPicker();
@@ -213,34 +216,34 @@ private:
     // TODO: Add a brief description.
     void showTrainingToast(const std::string& msg);
 
-    
+
     std::unordered_map<int, int> collectAllReadyTroops() const;
 
-    
-    
+
+
     // TODO: Add a brief description.
 
-    
-    
+
+
     void spawnStandTroop(int troopType);
     // Creates an instance.
     cocos2d::Sprite* createStandTroopSprite(int troopType) const;
 
     cocos2d::LayerColor* _trainMask = nullptr;
     cocos2d::Node* _trainPanel = nullptr;
-    cocos2d::Node* _trainReadyRow = nullptr;    
-    cocos2d::Node* _trainSelectRow = nullptr;   
-    cocos2d::Label* _trainCapLabel = nullptr;   
+    cocos2d::Node* _trainReadyRow = nullptr;
+    cocos2d::Node* _trainSelectRow = nullptr;
+    cocos2d::Label* _trainCapLabel = nullptr;
     cocos2d::EventListenerMouse* _trainMouseListener = nullptr;
     int _trainCampIndex = -1;
     int _trainLastSig = 0;
 
 
-    
+
     // Returns the TroopLevel.
 
 
-    
+
     int getTroopLevel(int unitId) const;
     // Sets the TroopLevel.
     void setTroopLevel(int unitId, int level);
@@ -249,10 +252,10 @@ private:
     // Updates the object state.
     void updateResearchSystems(float dt);
 
-    
+
     // TODO: Add a brief description.
 
-    
+
     void openLaboratoryResearchPicker(int buildingIndex);
     // TODO: Add a brief description.
     void closeLaboratoryResearchPicker();

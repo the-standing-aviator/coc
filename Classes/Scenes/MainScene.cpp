@@ -22,66 +22,66 @@
 #include <ctime>
 
 namespace {
-static float randomRealSafe(float a, float b)
-{
-    if (std::isnan(a) || std::isnan(b)) return 0.0f;
-    if (a > b) std::swap(a, b);
-    if (a == b) return a;
-    return cocos2d::RandomHelper::random_real(a, b);
-}
-
-static void playPickupSfxForBuildingId(int buildId)
-{
-    switch (buildId)
+    static float randomRealSafe(float a, float b)
     {
-    case 1: 
-        SoundManager::playSfxRandom("archer_tower_pick", 1.0f);
-        break;
-    case 2: 
-        SoundManager::playSfxRandom("cannon_pick", 1.0f);
-        break;
-    case 3: 
-        SoundManager::playSfxRandom("elixir_pump_pick", 1.0f);
-        break;
-    case 4: 
-        SoundManager::playSfxRandom("elixir_storage_pick", 1.0f);
-        break;
-    case 5: 
-        SoundManager::playSfxRandom("goldmine_pick", 1.0f);
-        break;
-    default:
-        SoundManager::playSfxRandom("building_pickup", 1.0f);
-        break;
+        if (std::isnan(a) || std::isnan(b)) return 0.0f;
+        if (a > b) std::swap(a, b);
+        if (a == b) return a;
+        return cocos2d::RandomHelper::random_real(a, b);
     }
-}
 
-static void playPlaceSfxForBuildingId(int buildId)
-{
-    switch (buildId)
+    static void playPickupSfxForBuildingId(int buildId)
     {
-    case 1: 
-        SoundManager::playSfxRandom("archer_tower_place", 1.0f);
-        break;
-    case 2: 
-        SoundManager::playSfxRandom("cannon_drop", 1.0f);
-        break;
-    case 3: 
-        SoundManager::playSfxRandom("elixir_pump_drop", 1.0f);
-        break;
-    case 4: 
-        SoundManager::playSfxRandom("elixir_storage_drop", 1.0f);
-        break;
-    case 5: 
-        SoundManager::playSfxRandom("goldmine_drop", 1.0f);
-        break;
-    case 6: 
-        SoundManager::playSfxRandom("gold_storage_drop", 1.0f);
-        break;
-    default:
-        SoundManager::playSfxRandom("building_place", 1.0f);
-        break;
+        switch (buildId)
+        {
+        case 1:
+            SoundManager::playSfxRandom("archer_tower_pick", 1.0f);
+            break;
+        case 2:
+            SoundManager::playSfxRandom("cannon_pick", 1.0f);
+            break;
+        case 3:
+            SoundManager::playSfxRandom("elixir_pump_pick", 1.0f);
+            break;
+        case 4:
+            SoundManager::playSfxRandom("elixir_storage_pick", 1.0f);
+            break;
+        case 5:
+            SoundManager::playSfxRandom("goldmine_pick", 1.0f);
+            break;
+        default:
+            SoundManager::playSfxRandom("building_pickup", 1.0f);
+            break;
+        }
     }
-}
+
+    static void playPlaceSfxForBuildingId(int buildId)
+    {
+        switch (buildId)
+        {
+        case 1:
+            SoundManager::playSfxRandom("archer_tower_place", 1.0f);
+            break;
+        case 2:
+            SoundManager::playSfxRandom("cannon_drop", 1.0f);
+            break;
+        case 3:
+            SoundManager::playSfxRandom("elixir_pump_drop", 1.0f);
+            break;
+        case 4:
+            SoundManager::playSfxRandom("elixir_storage_drop", 1.0f);
+            break;
+        case 5:
+            SoundManager::playSfxRandom("goldmine_drop", 1.0f);
+            break;
+        case 6:
+            SoundManager::playSfxRandom("gold_storage_drop", 1.0f);
+            break;
+        default:
+            SoundManager::playSfxRandom("building_place", 1.0f);
+            break;
+        }
+    }
 }
 
 #include "ui/CocosGUI.h"
@@ -91,13 +91,13 @@ static void playPlaceSfxForBuildingId(int buildId)
 #include <cstdio>
 
 namespace {
-    
-    
+
+
     static cocos2d::Node* safeCreateNode() {
         auto n = cocos2d::Node::create();
         if (n) return n;
 
-        
+
         cocos2d::Node* raw = new (std::nothrow) cocos2d::Node();
         if (raw && raw->init()) {
             raw->autorelease();
@@ -124,10 +124,10 @@ static bool CanResolveResource(const std::string& relPath)
 
 static std::string FallbackResourcePath(const std::string& relPath)
 {
-    
+
     if (CanResolveResource(relPath)) return relPath;
 
-    
+
     const std::string tries[] = {
         std::string("Resources/") + relPath,
         std::string("resources/") + relPath,
@@ -163,7 +163,11 @@ bool MainScene::init()
     _background->setScale(scale);
     _background->setPosition(Vec2(origin.x + screen.width / 2, origin.y + screen.height / 2));
     _world->addChild(_background, 0);
-
+    _backgroundOptions = {
+    "backgrounds/village_map.jpg",
+    "backgrounds/village_map_alt.jpg"
+    };
+    _backgroundIndex = 0;
     {
         Size img = _background->getContentSize();
         float base = _background->getScaleX();
@@ -179,17 +183,39 @@ bool MainScene::init()
     _world->addChild(_occupied, 2);
     _world->addChild(_hint, 2);
 
-    
+
     _standTroopLayer = Node::create();
     _world->addChild(_standTroopLayer, 4);
     _occupy.assign(_rows, std::vector<int>(_cols, 0));
-    
+
     _buildingScaleById.assign(12, 1.0f);
     _buildingOffsetById.assign(12, Vec2::ZERO);
 
     setupInteraction();
 
     SoundManager::play("music/home_music_part_1.ogg", true, 0.6f);
+
+    auto changeBgLabel = Label::createWithSystemFont("Change Background", "Arial", 20);
+    changeBgLabel->setColor(Color3B::WHITE);
+    auto changeBgItem = MenuItemLabel::create(changeBgLabel, [this, origin, visibleSize](Ref*) {
+        if (!_background || _backgroundOptions.empty()) return;
+        _backgroundIndex = (_backgroundIndex + 1) % _backgroundOptions.size();
+        const auto& nextPath = _backgroundOptions[_backgroundIndex];
+        auto texture = Director::getInstance()->getTextureCache()->addImage(nextPath);
+        if (!texture) return;
+        _background->setTexture(texture);
+        _background->setTextureRect(Rect(0, 0, texture->getContentSize().width, texture->getContentSize().height));
+        Size bgSize = _background->getContentSize();
+        float scale = std::max(visibleSize.width / bgSize.width, visibleSize.height / bgSize.height);
+        _background->setScale(scale);
+        _background->setPosition(Vec2(origin.x + visibleSize.width / 2, origin.y + visibleSize.height / 2));
+        });
+    changeBgItem->setAnchorPoint(Vec2(0.0f, 1.0f));
+    changeBgItem->setPosition(Vec2(origin.x + 12.0f, origin.y + visibleSize.height - 12.0f));
+    auto changeBgMenu = Menu::create(changeBgItem, nullptr);
+    changeBgMenu->setPosition(Vec2::ZERO);
+    this->addChild(changeBgMenu, 30);
+
 
     auto btn = BuildingButton::create();
     btn->setButtonScale(0.15f);
@@ -236,88 +262,89 @@ bool MainScene::init()
                 float x = area.origin.x + c * (cw + gap);
                 float y = area.origin.y + area.size.height - (r + 1) * ch - r * gap;
 
-                
-                
-                
+
+
+
                 int buttonIdx = idx;
-                if (idx == 10) buttonIdx = 11; 
-                
+                if (idx == 10) buttonIdx = 11;
+
                 std::string rawPath = StringUtils::format("ui/build_button%d.png", buttonIdx);
                 std::string path = FallbackResourcePath(rawPath);
 
-                
+
                 const int buildId = (idx == 9 ? 10 : (idx == 10 ? 11 : idx));
 
-				MenuItem* item = nullptr;
+                MenuItem* item = nullptr;
 
-				
-				
-				
-				
-				
-				auto makeSprite = [](const std::string& p) -> Sprite* {
-					auto sp = Sprite::create(p);
-					if (!sp) return nullptr;
-					
-					if (!sp->getTexture()) return nullptr;
-					Size s = sp->getContentSize();
-					if (s.width <= 0.0f || s.height <= 0.0f) return nullptr;
-					return sp;
-				};
 
-				std::vector<std::string> candidates;
-				candidates.push_back(rawPath);
-				
-				if (path != rawPath) candidates.push_back(path);
-				
-				candidates.push_back(std::string("Resources/") + rawPath);
-				candidates.push_back(std::string("../Resources/") + rawPath);
 
-				Sprite* normalSp = nullptr;
-				std::string picked;
-				for (const auto& p : candidates) {
-					normalSp = makeSprite(p);
-					if (normalSp) { picked = p; break; }
-				}
 
-				if (normalSp) {
-					
-					auto selectedSp = makeSprite(picked);
-					if (!selectedSp) {
-						
-						selectedSp = Sprite::createWithTexture(normalSp->getTexture());
-						selectedSp->setTextureRect(Rect(0, 0, normalSp->getContentSize().width, normalSp->getContentSize().height));
-					}
-					auto spriteItem = MenuItemSprite::create(normalSp, selectedSp, [this, buildId, panel](Ref*) {
-						SoundManager::playSfxRandom("button_click", 1.0f);
-						startPlacement(buildId);
-						panel->removeFromParent();
-					});
-					Size s = normalSp->getContentSize();
-					float sx = std::min(cw / s.width, ch / s.height);
-					spriteItem->setScale(sx);
-					item = spriteItem;
-				}
-				else {
-					
-					auto label = Label::createWithSystemFont(StringUtils::format("ID %d", buttonIdx), "Arial", 18);
-					label->setColor(Color3B::BLACK);
-					auto fallbackItem = MenuItemLabel::create(label, [this, buildId, panel](Ref*) {
-						SoundManager::playSfxRandom("button_click", 1.0f);
-						startPlacement(buildId);
-						panel->removeFromParent();
-					});
-					item = fallbackItem;
-				}
 
-                
+
+                auto makeSprite = [](const std::string& p) -> Sprite* {
+                    auto sp = Sprite::create(p);
+                    if (!sp) return nullptr;
+
+                    if (!sp->getTexture()) return nullptr;
+                    Size s = sp->getContentSize();
+                    if (s.width <= 0.0f || s.height <= 0.0f) return nullptr;
+                    return sp;
+                    };
+
+                std::vector<std::string> candidates;
+                candidates.push_back(rawPath);
+
+                if (path != rawPath) candidates.push_back(path);
+
+                candidates.push_back(std::string("Resources/") + rawPath);
+                candidates.push_back(std::string("../Resources/") + rawPath);
+
+                Sprite* normalSp = nullptr;
+                std::string picked;
+                for (const auto& p : candidates) {
+                    normalSp = makeSprite(p);
+                    if (normalSp) { picked = p; break; }
+                }
+
+                if (normalSp) {
+
+                    auto selectedSp = makeSprite(picked);
+                    if (!selectedSp) {
+
+                        selectedSp = Sprite::createWithTexture(normalSp->getTexture());
+                        selectedSp->setTextureRect(Rect(0, 0, normalSp->getContentSize().width, normalSp->getContentSize().height));
+                    }
+                    auto spriteItem = MenuItemSprite::create(normalSp, selectedSp, [this, buildId, panel](Ref*) {
+                        SoundManager::playSfxRandom("button_click", 1.0f);
+                        startPlacement(buildId);
+                        panel->removeFromParent();
+                        });
+                    Size s = normalSp->getContentSize();
+                    float sx = std::min(cw / s.width, ch / s.height);
+                    spriteItem->setScale(sx);
+                    item = spriteItem;
+                }
+                else {
+
+                    auto label = Label::createWithSystemFont(StringUtils::format("ID %d", buttonIdx), "Arial", 18);
+                    label->setColor(Color3B::BLACK);
+                    auto fallbackItem = MenuItemLabel::create(label, [this, buildId, panel](Ref*) {
+                        SoundManager::playSfxRandom("button_click", 1.0f);
+                        startPlacement(buildId);
+                        panel->removeFromParent();
+                        });
+                    item = fallbackItem;
+                }
+
+
                 const int limit = buildLimitForId(buildId);
-				if (countById(buildId) >= limit) {
+                if (countById(buildId) >= limit) {
                     item->setEnabled(false);
-					if (auto ms = dynamic_cast<MenuItemSprite*>(item)) {
-						if (auto normal = ms->getNormalImage()) normal->setColor(Color3B(150, 150, 150));
-						if (auto selected = ms->getSelectedImage()) selected->setColor(Color3B(150, 150, 150));
-                    } else if (auto ml = dynamic_cast<MenuItemLabel*>(item)) {
+                    if (auto ms = dynamic_cast<MenuItemSprite*>(item)) {
+                        if (auto normal = ms->getNormalImage()) normal->setColor(Color3B(150, 150, 150));
+                        if (auto selected = ms->getSelectedImage()) selected->setColor(Color3B(150, 150, 150));
+                    }
+                    else if (auto ml = dynamic_cast<MenuItemLabel*>(item)) {
                         if (auto lab = dynamic_cast<Label*>(ml->getLabel())) {
                             lab->setColor(Color3B(150, 150, 150));
                         }
@@ -333,7 +360,7 @@ bool MainScene::init()
         auto closeItem = MenuItemLabel::create(closeLabel, [panel](Ref*) {
             SoundManager::playSfxRandom("button_click", 1.0f);
             panel->removeFromParent();
-        });
+            });
         closeItem->setPosition(Vec2(origin.x + vs.width - 20.f, origin.y + vs.height - 20.f));
         auto closeMenu = Menu::create(closeItem, nullptr);
         closeMenu->setPosition(Vec2::ZERO);
@@ -363,7 +390,7 @@ bool MainScene::init()
 
     auto listener = EventListenerKeyboard::create();
     listener->onKeyPressed = [this](EventKeyboard::KeyCode code, Event*) {
-        
+
         if (code == EventKeyboard::KeyCode::KEY_ESCAPE) {
             if (_settingsMask) {
                 _settingsMask->removeFromParent();
@@ -381,7 +408,7 @@ bool MainScene::init()
         };
     _eventDispatcher->addEventListenerWithSceneGraphPriority(listener, this);
 
-    
+
     setBuildingScale(0.33f);
 
     setBuildingScaleForId(1, 0.4f);
@@ -425,7 +452,7 @@ void MainScene::openEscMenu()
     _escMask = LayerColor::create(Color4B(0, 0, 0, 180));
     this->addChild(_escMask, 200);
 
-    
+
     auto maskListener = EventListenerTouchOneByOne::create();
     maskListener->setSwallowTouches(true);
     maskListener->onTouchBegan = [](Touch*, Event*) { return true; };
@@ -438,8 +465,8 @@ void MainScene::openEscMenu()
         origin.y + visibleSize.height / 2 - panelH / 2);
     _escMask->addChild(panel);
 
-    
-panel->setScale(0.1f);
+
+    panel->setScale(0.1f);
     panel->runAction(EaseBackOut::create(ScaleTo::create(0.22f, 1.0f)));
 
     auto title = Label::createWithSystemFont("Menu", "Arial", 52);
@@ -453,7 +480,7 @@ panel->setScale(0.1f);
 
     auto backLabel = Label::createWithSystemFont("Back to Start", "Arial", 42);
     auto backItem = MenuItemLabel::create(backLabel, [this](Ref*) {
-        
+
         closeEscMenu();
         Director::getInstance()->replaceScene(
             TransitionFade::create(0.35f, MenuScene::createScene())
@@ -502,7 +529,7 @@ void MainScene::openSettings()
     auto visibleSize = Director::getInstance()->getVisibleSize();
     auto origin = Director::getInstance()->getVisibleOrigin();
 
-    
+
     _settingsMask = LayerColor::create(Color4B(0, 0, 0, 180));
     this->addChild(_settingsMask, 300);
 
@@ -511,7 +538,7 @@ void MainScene::openSettings()
     maskListener->onTouchBegan = [](Touch*, Event*) { return true; };
     _eventDispatcher->addEventListenerWithSceneGraphPriority(maskListener, _settingsMask);
 
-    
+
     const float panelW = 640.0f;
     const float panelH = 420.0f;
 
@@ -528,12 +555,12 @@ void MainScene::openSettings()
     panel->setScale(0.1f);
     panel->runAction(EaseBackOut::create(ScaleTo::create(0.22f, 1.0f)));
 
-    
+
     auto title = Label::createWithSystemFont("Settings", "Arial", 50);
     title->setPosition(Vec2(panelW / 2, panelH - 50));
     panel->addChild(title);
 
-    
+
     auto volLabel = Label::createWithSystemFont("Master Volume", "Arial", 32);
     volLabel->setAnchorPoint(Vec2(0.0f, 0.5f));
     volLabel->setPosition(Vec2(60, 260));
@@ -549,7 +576,7 @@ void MainScene::openSettings()
     volSlider->setPercent((int)(curVol * 100.0f + 0.5f));
     panel->addChild(volSlider);
 
-    
+
     auto mute = ui::CheckBox::create(
         "ui/checkbox_off.png",
         "ui/checkbox_on.png"
@@ -587,7 +614,7 @@ void MainScene::openSettings()
         }
         });
 
-    
+
     auto closeLabel = Label::createWithSystemFont("X", "Arial", 40);
     auto closeItem = MenuItemLabel::create(closeLabel, [this](Ref*) {
         if (_settingsMask) {
@@ -712,7 +739,7 @@ void MainScene::showMainToast(const std::string& msg)
     label->setColor(Color3B(200, 30, 30));
     label->enableOutline(Color4B::BLACK, 2);
     label->setPosition(Vec2(origin.x + vs.width * 0.5f, origin.y + vs.height * 0.6f));
-    
+
     this->addChild(label, 5000);
 
     label->runAction(Sequence::create(
@@ -728,7 +755,7 @@ int MainScene::getActiveBuilderCount() const
     int count = 0;
     for (const auto& pb : _buildings) {
         if (!pb.data) continue;
-        
+
         if (pb.id == 10) continue;
         if (pb.data->buildState != Building::STATE_NORMAL && pb.data->buildTotalSec > 0.0f && pb.data->buildRemainSec > 0.0f) {
             count++;
@@ -750,22 +777,22 @@ void MainScene::attachBuildTimerUI(cocos2d::Sprite* sprite, float totalSec, floa
     auto ui = Node::create();
     ui->setTag(kBuildUiTag);
 
-    
+
     auto label = Label::createWithSystemFont("00:00", "Arial", 26);
     label->setTag(kBuildUiLabelTag);
     label->setColor(Color3B::BLACK);
     label->enableOutline(Color4B::BLACK, 3);
     ui->addChild(label, 2);
 
-    
-    
-    
+
+
+
     const float w = 72.0f;
     const float h = 8.0f;
     auto bg = LayerColor::create(Color4B(30, 30, 30, 200), w, h);
     bg->setTag(kBuildUiBgTag);
-    
-    
+
+
     bg->setIgnoreAnchorPointForPosition(false);
     bg->setAnchorPoint(Vec2(0.5f, 0.5f));
     bg->setPosition(Vec2(0.f, -12.f));
@@ -778,7 +805,7 @@ void MainScene::attachBuildTimerUI(cocos2d::Sprite* sprite, float totalSec, floa
     fill->setPosition(Vec2(-w * 0.5f, -12.f));
     ui->addChild(fill, 1);
 
-    
+
     ui->setPosition(Vec2(sprite->getContentSize().width * 0.5f, sprite->getContentSize().height + 20.f));
     sprite->addChild(ui, 200);
 
@@ -809,7 +836,7 @@ void MainScene::updateBuildTimerUI(cocos2d::Sprite* sprite, float totalSec, floa
         float h = bg->getContentSize().height;
         float clamped = std::max(0.0f, std::min(1.0f, ratio));
         fill->setContentSize(Size(w * clamped, h));
-        
+
         fill->setPosition(Vec2(-w * 0.5f, bg->getPositionY()));
     }
 }
@@ -828,12 +855,12 @@ void MainScene::updateBuildSystems(float dt)
     for (auto& pb : _buildings) {
         if (!pb.data || !pb.sprite) continue;
         if (pb.data->buildState == Building::STATE_NORMAL) {
-            
+
             removeBuildTimerUI(pb.sprite);
             continue;
         }
         if (pb.data->buildTotalSec <= 0.0f || pb.data->buildRemainSec <= 0.0f) {
-            
+
             pb.data->buildRemainSec = 0.0f;
         }
         else {
@@ -842,7 +869,7 @@ void MainScene::updateBuildSystems(float dt)
         }
 
         if (pb.data->buildRemainSec <= 0.0f) {
-            
+
             SoundManager::playSfxRandom("building_finished", 1.0f);
             if (pb.data->buildState == Building::STATE_UPGRADING && pb.data->upgradeTargetLevel > 0) {
                 pb.data->level = pb.data->upgradeTargetLevel;
@@ -853,11 +880,11 @@ void MainScene::updateBuildSystems(float dt)
             pb.data->buildRemainSec = 0.0f;
             pb.data->upgradeTargetLevel = 0;
 
-            
+
             BuildingFactory::applyStats(pb.data.get(), pb.id, pb.data->level, true, false);
 
-            
-            
+
+
             if (pb.sprite) {
                 pb.sprite->removeFromParent();
                 pb.sprite = nullptr;
@@ -865,7 +892,7 @@ void MainScene::updateBuildSystems(float dt)
             {
                 auto s = pb.data->createSprite();
                 cocos2d::Vec2 center(_anchor.x + (pb.c - pb.r) * (_tileW * 0.5f),
-                                     _anchor.y - (pb.c + pb.r) * (_tileH * 0.5f));
+                    _anchor.y - (pb.c + pb.r) * (_tileH * 0.5f));
                 int idx = std::max(1, std::min(11, pb.id));
                 cocos2d::Vec2 off = _buildingOffsetById[idx];
                 s->setPosition(center + off);
@@ -874,7 +901,7 @@ void MainScene::updateBuildSystems(float dt)
                 pb.sprite = s;
             }
 
-            
+
             if (pb.sprite) {
                 auto lvl = dynamic_cast<cocos2d::Label*>(pb.sprite->getChildByTag(20251225));
                 if (lvl) lvl->setString(cocos2d::StringUtils::format("level%d", pb.data->level));
@@ -886,7 +913,7 @@ void MainScene::updateBuildSystems(float dt)
             _saveDirty = true;
         }
         else {
-            
+
             if (!pb.sprite->getChildByTag(kBuildUiTag)) {
                 attachBuildTimerUI(pb.sprite, pb.data->buildTotalSec, pb.data->buildRemainSec);
             }
@@ -896,7 +923,7 @@ void MainScene::updateBuildSystems(float dt)
     }
 
     if (anyFinished) {
-        
+
         ResourceManager::setGold(ResourceManager::getGold());
         ResourceManager::setElixir(ResourceManager::getElixir());
         ResourceManager::setPopulation(ResourceManager::getPopulation());
@@ -905,19 +932,19 @@ void MainScene::updateBuildSystems(float dt)
 
 void MainScene::update(float dt)
 {
-    
+
     updateBuildSystems(dt);
 
-    
+
     updateResearchSystems(dt);
 
     for (size_t i = 0; i < _buildings.size(); ++i) {
         auto& pb = _buildings[i];
         if (!pb.data) continue;
 
-        
+
         if (!pb.data->isFunctional()) {
-            
+
             if (auto ec = dynamic_cast<ElixirCollector*>(pb.data.get())) {
                 if (ec->promptLabel) {
                     ec->promptLabel->removeFromParent();
@@ -947,13 +974,13 @@ void MainScene::update(float dt)
         }
     }
 
-    
-     
+
+
     if (_trainMask && _trainCampIndex >= 0 && _trainCampIndex < (int)_buildings.size()) {
         auto& pb = _buildings[_trainCampIndex];
         if (pb.data) {
             if (auto tc = dynamic_cast<TrainingCamp*>(pb.data.get())) {
-                
+
                 int sig = 0;
                 const auto& ready = tc->getAllReadyCounts();
                 for (const auto& kv : ready) {
@@ -961,16 +988,16 @@ void MainScene::update(float dt)
                     sig = sig * 31 + kv.second;
                 }
 
-                
+
                 if (sig != _trainLastSig) {
                     _trainLastSig = sig;
                     refreshTrainingCampUI();
                 }
 
-                if (_trainCapLabel) 
+                if (_trainCapLabel)
                 {
                     int totalCap = ResourceManager::getPopulationCap();
-                    int usedHousing = tc->getUsedHousing(); 
+                    int usedHousing = tc->getUsedHousing();
                     char buf[64];
                     snprintf(buf, sizeof(buf), "%d / %d", usedHousing, totalCap);
                     _trainCapLabel->setString(buf);
@@ -1006,8 +1033,8 @@ void MainScene::openUpgradeWindowForIndex(int idx)
     auto& b = _buildings[idx];
     if (!b.data) return;
 
-    
-    
+
+
 
     int curLv = b.data->level;
     bool isMax = (curLv >= ConfigManager::getMaxLevel());
@@ -1025,19 +1052,19 @@ void MainScene::openUpgradeWindowForIndex(int idx)
             auto& pb = _buildings[idx];
             if (!pb.data) return true;
 
-            
+
             if (pb.data->level >= ConfigManager::getMaxLevel()) {
                 showMainToast("Already Max Level");
                 return false;
             }
 
-            
+
             if (pb.data->buildState != Building::STATE_NORMAL && pb.data->buildRemainSec > 0.0f) {
                 showMainToast("Not enough builders.");
                 return false;
             }
 
-            
+
             int th = getTownHallLevel();
             int maxBk2 = 0;
             for (const auto& it : _buildings) {
@@ -1050,13 +1077,13 @@ void MainScene::openUpgradeWindowForIndex(int idx)
                 return false;
             }
 
-            
+
             if (upgradeTime > 0 && getActiveBuilderCount() >= 2) {
                 showMainToast("Not enough builders.");
                 return false;
             }
 
-            
+
             if (cost.amount > 0) {
                 if (cost.useGold) {
                     if (ResourceManager::getGold() < cost.amount) {
@@ -1081,22 +1108,22 @@ void MainScene::openUpgradeWindowForIndex(int idx)
                 ok = true;
             }
             if (!ok) {
-                
+
                 showMainToast(cost.useGold ? "Not enough gold." : "Not enough elixir.");
                 return false;
             }
 
             SoundManager::playSfx("music/building_construct_07.ogg", 1.0f);
 
-            
+
             if (upgradeTime <= 0) {
                 pb.data->level = nextLv;
 
-                
+
                 BuildingFactory::applyStats(pb.data.get(), pb.id, pb.data->level, true, false);
 
-                
-                
+
+
                 if (pb.sprite) {
                     pb.sprite->removeFromParent();
                     pb.sprite = nullptr;
@@ -1104,7 +1131,7 @@ void MainScene::openUpgradeWindowForIndex(int idx)
                 if (_world) {
                     auto s = pb.data->createSprite();
                     cocos2d::Vec2 center(_anchor.x + (pb.c - pb.r) * (_tileW * 0.5f),
-                                         _anchor.y - (pb.c + pb.r) * (_tileH * 0.5f));
+                        _anchor.y - (pb.c + pb.r) * (_tileH * 0.5f));
                     int idx2 = std::max(1, std::min(11, pb.id));
                     cocos2d::Vec2 off = _buildingOffsetById[idx2];
                     s->setPosition(center + off);
@@ -1117,7 +1144,7 @@ void MainScene::openUpgradeWindowForIndex(int idx)
                 return true;
             }
 
-            
+
             pb.data->buildState = Building::STATE_UPGRADING;
             pb.data->buildTotalSec = (float)upgradeTime;
             pb.data->buildRemainSec = (float)upgradeTime;
@@ -1131,9 +1158,9 @@ void MainScene::openUpgradeWindowForIndex(int idx)
         },
         []() {}
     );
-    
-    
-    
+
+
+
     if (b.id == 8) {
         auto inner = modal ? modal->getChildByName("__inner_upgrade_panel") : nullptr;
         auto panel = dynamic_cast<cocos2d::LayerColor*>(inner);
@@ -1142,7 +1169,7 @@ void MainScene::openUpgradeWindowForIndex(int idx)
         trainLabel->setColor(Color3B::BLACK);
         auto trainItem = MenuItemLabel::create(trainLabel, [this, idx, modal](Ref*) {
             if (modal) modal->removeFromParent();
-            
+
             if (idx >= 0 && idx < (int)_buildings.size() && _buildings[idx].data) {
                 auto bd = _buildings[idx].data;
                 if (bd->buildState != Building::STATE_NORMAL && bd->buildRemainSec > 0.0f) {
@@ -1151,8 +1178,8 @@ void MainScene::openUpgradeWindowForIndex(int idx)
                 }
             }
             openTrainingCampPicker(idx);
-        });
-        
+            });
+
         float pw = panel ? panel->getContentSize().width : (modal ? modal->getContentSize().width : 0.0f);
         trainItem->setPosition(Vec2(pw * 0.5f, 80.f));
         auto trainMenu = Menu::create(trainItem, nullptr);
@@ -1161,7 +1188,7 @@ void MainScene::openUpgradeWindowForIndex(int idx)
         else if (modal) modal->addChild(trainMenu, 4);
     }
 
-    
+
     if (b.id == 11) {
         auto inner = modal ? modal->getChildByName("__inner_upgrade_panel") : nullptr;
         auto panel = dynamic_cast<cocos2d::LayerColor*>(inner);
@@ -1171,7 +1198,7 @@ void MainScene::openUpgradeWindowForIndex(int idx)
         auto researchItem = MenuItemLabel::create(researchLabel, [this, idx, modal](Ref*) {
             if (modal) modal->removeFromParent();
 
-            
+
             if (idx >= 0 && idx < (int)_buildings.size() && _buildings[idx].data) {
                 auto bd = _buildings[idx].data;
                 if (bd->buildState != Building::STATE_NORMAL && bd->buildRemainSec > 0.0f) {
@@ -1181,7 +1208,7 @@ void MainScene::openUpgradeWindowForIndex(int idx)
             }
 
             openLaboratoryResearchPicker(idx);
-        });
+            });
 
         float pw = panel ? panel->getContentSize().width : (modal ? modal->getContentSize().width : 0.0f);
         researchItem->setPosition(Vec2(pw * 0.5f, 50.f));
@@ -1191,8 +1218,8 @@ void MainScene::openUpgradeWindowForIndex(int idx)
         else if (modal) modal->addChild(researchMenu, 4);
     }
 
-    
-    
+
+
     this->addChild(modal, 1000);
 }
 
@@ -1200,26 +1227,26 @@ void MainScene::openUpgradeWindowForIndex(int idx)
 
 void MainScene::setupInteraction()
 {
-    
-    
+
+
     auto isUIBlocked = [this]() -> bool {
         if (_escMask && _escMask->isVisible()) return true;
         if (_settingsMask && _settingsMask->isVisible()) return true;
         if (_attackMask && _attackMask->isVisible()) return true;
         if (_trainMask && _trainMask->isVisible()) return true;
         if (_researchMask && _researchMask->isVisible()) return true;
-        
+
         if (this->getChildByName("__modal_mask__")) return true;
         return false;
-    };
+        };
 
     auto mouse = EventListenerMouse::create();
     mouse->onMouseScroll = [this, isUIBlocked](Event* e) {
         auto ev = static_cast<EventMouse*>(e);
         if (isUIBlocked()) return;
-        
+
         if (_attackMask && _attackMask->isVisible()) return;
-float delta = ev->getScrollY();
+        float delta = ev->getScrollY();
         float k = 1.1f;
         if (delta > 0) setZoom(_zoom / k);
         else if (delta < 0) setZoom(_zoom * k);
@@ -1230,8 +1257,8 @@ float delta = ev->getScrollY();
         if (ev->getMouseButton() == EventMouse::MouseButton::BUTTON_LEFT) {
             Vec2 cur(ev->getCursorX(), ev->getCursorY());
 
-            
-            
+
+
             if (!_placing && !_moving && _world) {
                 Vec2 local = _world->convertToNodeSpace(cur);
                 for (size_t i = 0; i < _buildings.size(); ++i) {
@@ -1242,7 +1269,7 @@ float delta = ev->getScrollY();
                     if (auto ec = dynamic_cast<ElixirCollector*>(pb.data.get())) {
                         if (ec->promptLabel) {
                             cocos2d::Rect r = ec->promptLabel->getBoundingBox();
-                            
+
                             r.origin -= Vec2(6.f, 4.f);
                             r.size.width += 12.f;
                             r.size.height += 8.f;
@@ -1310,8 +1337,8 @@ float delta = ev->getScrollY();
                                     if (!it.data) continue;
                                     if (!it.data->isFunctional()) continue;
                                     if (auto ec2 = dynamic_cast<ElixirCollector*>(it.data.get())) {
-                                        
-                                        
+
+
                                         totalDeliver += ec2->collect(true);
                                     }
                                 }
@@ -1497,7 +1524,7 @@ void MainScene::placeBuilding(int r, int c, int id)
         return;
     }
 
-    
+
     {
         int th = getTownHallLevel();
         int maxBk = 0;
@@ -1510,7 +1537,7 @@ void MainScene::placeBuilding(int r, int c, int id)
         }
     }
 
-    
+
     int buildTime = ConfigManager::getBuildTimeSec(id, 1);
     if (buildTime > 0 && getActiveBuilderCount() >= 2) {
         showMainToast("Not enough builders.");
@@ -1518,14 +1545,15 @@ void MainScene::placeBuilding(int r, int c, int id)
     }
 
     auto buildCost = ConfigManager::getBuildCost(id);
-    
+
     if (buildCost.amount > 0) {
         if (buildCost.useGold) {
             if (ResourceManager::getGold() < buildCost.amount) {
                 showMainToast("Not enough gold.");
                 return;
             }
-        } else {
+        }
+        else {
             if (ResourceManager::getElixir() < buildCost.amount) {
                 showMainToast("Not enough elixir.");
                 return;
@@ -1545,7 +1573,7 @@ void MainScene::placeBuilding(int r, int c, int id)
                 drawCellFilled(r + dr, c + dc, Color4F(0.2f, 0.8f, 0.2f, 0.6f), _occupied);
     }
 
-    
+
     bool applyCapsNow = (buildTime <= 0);
     auto b = BuildingFactory::create(id, 1, applyCapsNow, true);
     auto s = b->createSprite();
@@ -1556,7 +1584,7 @@ void MainScene::placeBuilding(int r, int c, int id)
     s->setScale(_buildingScale * _buildingScaleById[idx]);
     _world->addChild(s, 3);
 
-    
+
     if (buildTime > 0) {
         b->buildState = Building::STATE_CONSTRUCTING;
         b->buildTotalSec = (float)buildTime;
@@ -1564,19 +1592,20 @@ void MainScene::placeBuilding(int r, int c, int id)
         b->upgradeTargetLevel = 0;
         if (s) s->setOpacity(160);
         attachBuildTimerUI(s, b->buildTotalSec, b->buildRemainSec);
-    } else {
+    }
+    else {
         b->buildState = Building::STATE_NORMAL;
         b->buildTotalSec = 0.0f;
         b->buildRemainSec = 0.0f;
         b->upgradeTargetLevel = 0;
     }
 
-    
+
     if (buildCost.amount > 0) {
         bool ok = buildCost.useGold ? ResourceManager::spendGold(buildCost.amount)
             : ResourceManager::spendElixir(buildCost.amount);
         if (!ok) {
-            
+
             if (s) s->removeFromParent();
             return;
         }
@@ -1585,7 +1614,7 @@ void MainScene::placeBuilding(int r, int c, int id)
     std::shared_ptr<Building> ptr(b.release());
     _buildings.push_back({ id, r, c, s, ptr });
 
-    
+
     playPlaceSfxForBuildingId(id);
 
     _saveDirty = true;
@@ -1693,7 +1722,7 @@ void MainScene::commitMove(int r, int c)
     b.r = r; b.c = c;
     redrawOccupied();
 
-    
+
     playPlaceSfxForBuildingId(b.id);
 
     _saveDirty = true;
@@ -1732,22 +1761,22 @@ void MainScene::loadFromCurrentSaveOrCreate()
     if (_occupied) _occupied->clear();
 
     ResourceManager::reset();
-    
-    
-    
-    
+
+
+
+
     {
         const int64_t now = static_cast<int64_t>(std::time(nullptr));
         const int64_t last = data.lastRealTime;
-	        if (last > 0 && now > last) {
-	            const double elapsed = static_cast<double>(now - last); 
+        if (last > 0 && now > last) {
+            const double elapsed = static_cast<double>(now - last);
 
-            
+
             for (auto& b : data.buildings) {
                 if (b.buildState != Building::STATE_NORMAL && b.buildTotalSec > 0.0f && b.buildRemainSec > 0.0f) {
                     b.buildRemainSec = std::max(0.0f, b.buildRemainSec - (float)elapsed);
                     if (b.buildRemainSec <= 0.0f) {
-                        
+
                         if (b.buildState == Building::STATE_UPGRADING && b.upgradeTargetLevel > 0) {
                             b.level = b.upgradeTargetLevel;
                         }
@@ -1759,7 +1788,7 @@ void MainScene::loadFromCurrentSaveOrCreate()
                 }
             }
 
-	            
+
             for (auto& b : data.buildings) {
                 if (b.buildState != Building::STATE_NORMAL) continue;
                 if (b.id == 3) {
@@ -1772,32 +1801,32 @@ void MainScene::loadFromCurrentSaveOrCreate()
                     float add = static_cast<float>(st.ratePerHour * (elapsed / 3600.0));
                     b.stored = std::min((float)st.capacity, b.stored + add);
                 }
-	            }
+            }
 
-	            
-	            if (data.researchUnitId > 0 && data.researchRemainSec > 0.0f && data.researchTotalSec > 0.0f) {
-	                data.researchRemainSec = std::max(0.0f, data.researchRemainSec - (float)elapsed);
-	                if (data.researchRemainSec <= 0.0f) {
-	                    
-	                    int cur = 1;
-	                    auto it = data.troopLevels.find(data.researchUnitId);
-	                    if (it != data.troopLevels.end()) cur = it->second;
-	                    int newLv = std::max(cur, data.researchTargetLevel);
-	                    data.troopLevels[data.researchUnitId] = newLv;
-	                    data.researchUnitId = 0;
-	                    data.researchTargetLevel = 0;
-	                    data.researchTotalSec = 0.0f;
-	                    data.researchRemainSec = 0.0f;
-	                }
-	            }
-	        }
 
-	        data.lastRealTime = now;
-	        _saveDirty = true; 
+            if (data.researchUnitId > 0 && data.researchRemainSec > 0.0f && data.researchTotalSec > 0.0f) {
+                data.researchRemainSec = std::max(0.0f, data.researchRemainSec - (float)elapsed);
+                if (data.researchRemainSec <= 0.0f) {
+
+                    int cur = 1;
+                    auto it = data.troopLevels.find(data.researchUnitId);
+                    if (it != data.troopLevels.end()) cur = it->second;
+                    int newLv = std::max(cur, data.researchTargetLevel);
+                    data.troopLevels[data.researchUnitId] = newLv;
+                    data.researchUnitId = 0;
+                    data.researchTargetLevel = 0;
+                    data.researchTotalSec = 0.0f;
+                    data.researchRemainSec = 0.0f;
+                }
+            }
+        }
+
+        data.lastRealTime = now;
+        _saveDirty = true;
     }
 
-    
-    
+
+
     _timeScale = 1.0f;
 
     for (const auto& b : data.buildings)
@@ -1824,7 +1853,7 @@ void MainScene::loadFromCurrentSaveOrCreate()
     ResourceManager::setElixir(data.elixir);
     ResourceManager::setPopulation(data.population);
 
-    
+
     _troopLevels = data.troopLevels;
     for (int id = 1; id <= 4; ++id) {
         if (_troopLevels.find(id) == _troopLevels.end()) _troopLevels[id] = 1;
@@ -1835,8 +1864,8 @@ void MainScene::loadFromCurrentSaveOrCreate()
     _activeResearchRemainSec = data.researchRemainSec;
 
 
-restoreStandTroopsFromSave(data);
-applyStandTroopsToTrainingCamps();
+    restoreStandTroopsFromSave(data);
+    applyStandTroopsToTrainingCamps();
 
     _saveDirty = false;
     _autosaveTimer = 0.0f;
@@ -1862,11 +1891,11 @@ void MainScene::saveToCurrentSlot(bool force)
     data.gold = ResourceManager::getGold();
     data.elixir = ResourceManager::getElixir();
     data.population = ResourceManager::getPopulation();
-    
+
     data.timeScale = 1.0f;
     data.lastRealTime = static_cast<int64_t>(std::time(nullptr));
 
-    
+
     data.troopLevels = _troopLevels;
     data.researchUnitId = _activeResearchUnitId;
     data.researchTargetLevel = _activeResearchTargetLevel;
@@ -1874,16 +1903,16 @@ void MainScene::saveToCurrentSlot(bool force)
     data.researchRemainSec = _activeResearchRemainSec;
 
 
-data.trainedTroops.clear();
-data.trainedTroops.reserve(_standTroops.size());
-for (const auto& t : _standTroops)
-{
-    SaveTrainedTroop st;
-    st.type = t.type;
-    st.r = t.r;
-    st.c = t.c;
-    data.trainedTroops.push_back(st);
-}
+    data.trainedTroops.clear();
+    data.trainedTroops.reserve(_standTroops.size());
+    for (const auto& t : _standTroops)
+    {
+        SaveTrainedTroop st;
+        st.type = t.type;
+        st.r = t.r;
+        st.c = t.c;
+        data.trainedTroops.push_back(st);
+    }
 
     for (const auto& b : _buildings)
     {
@@ -1897,7 +1926,7 @@ for (const auto& t : _standTroops)
             sb.hp = b.data->hp;
             sb.stored = b.data->stored;
 
-            
+
             sb.buildState = b.data->buildState;
             sb.buildTotalSec = b.data->buildTotalSec;
             sb.buildRemainSec = b.data->buildRemainSec;
@@ -1937,9 +1966,9 @@ void MainScene::placeBuildingLoaded(int r, int c, const SaveBuilding& info)
                 drawCellFilled(r + dr, c + dc, Color4F(0.2f, 0.8f, 0.2f, 0.6f), _occupied);
     }
 
-    
-    
-    
+
+
+
     bool hasTimer = (info.buildState != 0 && info.buildTotalSec > 0.0f && info.buildRemainSec > 0.0f);
     bool applyCapsNow = true;
     if (hasTimer && info.buildState == Building::STATE_CONSTRUCTING) {
@@ -1952,7 +1981,7 @@ void MainScene::placeBuildingLoaded(int r, int c, const SaveBuilding& info)
     if (info.hp > 0) b->hp = std::min(info.hp, b->hpMax);
     b->stored = info.stored;
 
-    
+
     b->buildState = info.buildState;
     b->buildTotalSec = info.buildTotalSec;
     b->buildRemainSec = info.buildRemainSec;
@@ -1980,7 +2009,7 @@ void MainScene::openAttackTargetPicker()
     auto visibleSize = Director::getInstance()->getVisibleSize();
     auto origin = Director::getInstance()->getVisibleOrigin();
 
-    
+
     _attackMask = LayerColor::create(Color4B(0, 0, 0, 180));
     this->addChild(_attackMask, 250);
 
@@ -1996,7 +2025,7 @@ void MainScene::openAttackTargetPicker()
     panel->setIgnoreAnchorPointForPosition(false);
     panel->setAnchorPoint(Vec2(0, 0));
     panel->setPosition(origin.x + visibleSize.width / 2 - panelW / 2,
-                       origin.y + visibleSize.height / 2 - panelH / 2);
+        origin.y + visibleSize.height / 2 - panelH / 2);
     _attackMask->addChild(panel);
 
     _attackPanel = panel;
@@ -2005,18 +2034,18 @@ void MainScene::openAttackTargetPicker()
     title->setPosition(Vec2(panelW / 2, panelH - 50));
     panel->addChild(title);
 
-    
+
     auto closeLabel = Label::createWithSystemFont("X", "Arial", 44);
     closeLabel->setColor(Color3B::WHITE);
     auto closeItem = MenuItemLabel::create(closeLabel, [this](Ref*) {
         closeAttackTargetPicker();
-    });
+        });
     closeItem->setPosition(Vec2(panelW - 30, panelH - 40));
     auto closeMenu = Menu::create(closeItem, nullptr);
     closeMenu->setPosition(Vec2::ZERO);
     panel->addChild(closeMenu, 2);
 
-    
+
     auto metasAll = SaveSystem::listAllSlots();
     std::vector<SaveMeta> targets;
     targets.reserve(metasAll.size());
@@ -2026,13 +2055,13 @@ void MainScene::openAttackTargetPicker()
             targets.push_back(m);
     }
 
-    
+
     _attackScroll = ui::ScrollView::create();
     _attackScroll->setDirection(ui::ScrollView::Direction::VERTICAL);
     _attackScroll->setBounceEnabled(true);
     _attackScroll->setContentSize(Size(panelW - 40, panelH - 140));
-    
-    
+
+
     _attackScroll->setAnchorPoint(Vec2::ZERO);
     _attackScroll->setIgnoreAnchorPointForPosition(true);
     _attackScroll->setPosition(Vec2(20, 60));
@@ -2051,7 +2080,7 @@ void MainScene::openAttackTargetPicker()
         auto msg = Label::createWithSystemFont("No other saves to attack.", "Arial", 30);
         msg->setColor(Color3B::WHITE);
         msg->setPosition(Vec2(_attackScroll->getContentSize().width * 0.5f,
-                              _attackScroll->getContentSize().height * 0.5f));
+            _attackScroll->getContentSize().height * 0.5f));
         _attackContent->addChild(msg);
     }
     else
@@ -2066,8 +2095,8 @@ void MainScene::openAttackTargetPicker()
             float y = innerH - rowH * (i + 1);
 
             auto rowBg = LayerColor::create(Color4B(120, 120, 120, 255),
-                                            _attackScroll->getContentSize().width,
-                                            rowH - 6);
+                _attackScroll->getContentSize().width,
+                rowH - 6);
             rowBg->setIgnoreAnchorPointForPosition(false);
             rowBg->setAnchorPoint(Vec2(0, 0));
             rowBg->setPosition(Vec2(0, y + 3));
@@ -2082,13 +2111,13 @@ void MainScene::openAttackTargetPicker()
             auto attackLabel = Label::createWithSystemFont("Attack", "Arial", 26);
             auto attackItem = MenuItemLabel::create(attackLabel, [this, meta](Ref*) {
                 SaveSystem::setBattleTargetSlot(meta.slot);
-                
+
                 SaveSystem::setBattleReadyTroops(collectAllReadyTroops());
                 SaveSystem::setBattleTroopLevels(_troopLevels);
                 closeAttackTargetPicker();
                 auto scene = BattleScene::createScene();
                 Director::getInstance()->replaceScene(TransitionFade::create(0.3f, scene));
-            });
+                });
             attackItem->setPosition(Vec2(_attackScroll->getContentSize().width - 60, (rowH - 6) * 0.5f));
             auto rowMenu = Menu::create(attackItem, nullptr);
             rowMenu->setPosition(Vec2::ZERO);
@@ -2096,33 +2125,33 @@ void MainScene::openAttackTargetPicker()
         }
     }
 
-    
+
     if (!_attackMouseListener)
     {
         _attackMouseListener = EventListenerMouse::create();
         _attackMouseListener->onMouseScroll = [this](Event* e)
-        {
-            auto m = static_cast<EventMouse*>(e);
-            if (!_attackMask || !_attackMask->isVisible() || !_attackScroll || !_attackPanel) return;
+            {
+                auto m = static_cast<EventMouse*>(e);
+                if (!_attackMask || !_attackMask->isVisible() || !_attackScroll || !_attackPanel) return;
 
-            Vec2 glPos = Director::getInstance()->convertToGL(Vec2(m->getCursorX(), m->getCursorY()));
-            Vec2 local = _attackPanel->convertToNodeSpace(glPos);
-            Rect r(0, 0, _attackPanel->getContentSize().width, _attackPanel->getContentSize().height);
-            if (!r.containsPoint(local)) return;
+                Vec2 glPos = Director::getInstance()->convertToGL(Vec2(m->getCursorX(), m->getCursorY()));
+                Vec2 local = _attackPanel->convertToNodeSpace(glPos);
+                Rect r(0, 0, _attackPanel->getContentSize().width, _attackPanel->getContentSize().height);
+                if (!r.containsPoint(local)) return;
 
-            float dy = m->getScrollY() * 60.0f;
-            Vec2 pos = _attackScroll->getInnerContainerPosition();
-            pos.y += dy;
+                float dy = m->getScrollY() * 60.0f;
+                Vec2 pos = _attackScroll->getInnerContainerPosition();
+                pos.y += dy;
 
-            float minY = _attackScroll->getContentSize().height - _attackScroll->getInnerContainerSize().height;
-            if (minY > 0) minY = 0;
+                float minY = _attackScroll->getContentSize().height - _attackScroll->getInnerContainerSize().height;
+                if (minY > 0) minY = 0;
 
-            if (pos.y > 0) pos.y = 0;
-            if (pos.y < minY) pos.y = minY;
+                if (pos.y > 0) pos.y = 0;
+                if (pos.y < minY) pos.y = minY;
 
-            _attackScroll->setInnerContainerPosition(pos);
-            e->stopPropagation();
-        };
+                _attackScroll->setInnerContainerPosition(pos);
+                e->stopPropagation();
+            };
         _eventDispatcher->addEventListenerWithSceneGraphPriority(_attackMouseListener, _attackMask);
     }
 }
@@ -2139,7 +2168,7 @@ void MainScene::closeAttackTargetPicker()
         _attackPanel = nullptr;
         _attackScroll = nullptr;
         _attackContent = nullptr;
-_attackMask->removeFromParent();
+        _attackMask->removeFromParent();
         _attackMask = nullptr;
     }
 }
@@ -2165,7 +2194,7 @@ void MainScene::openTrainingCampPicker(int buildingIndex)
     auto visibleSize = Director::getInstance()->getVisibleSize();
     auto origin = Director::getInstance()->getVisibleOrigin();
 
-    
+
     _trainMask = LayerColor::create(Color4B(0, 0, 0, 180));
     this->addChild(_trainMask, 260);
 
@@ -2174,7 +2203,7 @@ void MainScene::openTrainingCampPicker(int buildingIndex)
     maskListener->onTouchBegan = [](Touch*, Event*) { return true; };
     _eventDispatcher->addEventListenerWithSceneGraphPriority(maskListener, _trainMask);
 
-    
+
     float panelW = visibleSize.width * 0.90f;
     float panelH = visibleSize.height * 0.85f;
     auto panel = LayerColor::create(Color4B(245, 245, 245, 255), panelW, panelH);
@@ -2182,39 +2211,39 @@ void MainScene::openTrainingCampPicker(int buildingIndex)
     _trainMask->addChild(panel, 1);
     _trainPanel = panel;
 
-    
+
     auto title = Label::createWithSystemFont("Training", "Arial", 26);
     title->setColor(Color3B::BLACK);
     title->setPosition(Vec2(panelW * 0.5f, panelH - 30.f));
     panel->addChild(title, 2);
 
-    
+
     auto closeLbl = Label::createWithSystemFont("X", "Arial", 26);
     closeLbl->setColor(Color3B::BLACK);
     auto closeItem = MenuItemLabel::create(closeLbl, [this](Ref*) {
         SoundManager::playSfxRandom("button_click", 1.0f);
         closeTrainingCampPicker();
-    });
+        });
     closeItem->setPosition(Vec2(panelW - 22.f, panelH - 28.f));
     auto closeMenu = Menu::create(closeItem, nullptr);
     closeMenu->setPosition(Vec2::ZERO);
     panel->addChild(closeMenu, 3);
 
-    
+
     _trainCapLabel = Label::createWithSystemFont("", "Arial", 18);
     _trainCapLabel->setColor(Color3B::BLACK);
     _trainCapLabel->setAnchorPoint(Vec2(1, 0.5));
     _trainCapLabel->setPosition(Vec2(panelW - 20.f, panelH - 70.f));
     panel->addChild(_trainCapLabel, 2);
 
-    
+
     auto rTitle = Label::createWithSystemFont("Ready", "Arial", 18);
     rTitle->setColor(Color3B::BLACK);
     rTitle->setAnchorPoint(Vec2(0, 0.5));
     rTitle->setPosition(Vec2(20.f, panelH - 100.f));
     panel->addChild(rTitle, 2);
 
-    
+
     float readyIconH = 80.0f;
     {
         auto probe = Sprite::create(TrainingCamp::getTroopIcon(TrainingCamp::TROOP_BARBARIAN));
@@ -2226,17 +2255,19 @@ void MainScene::openTrainingCampPicker(int buildingIndex)
     if (_trainReadyRow) {
         _trainReadyRow->setPosition(Vec2(rTitle->getPositionX() + rTitle->getContentSize().width + 15.0f, rTitle->getPositionY() - readyIconH));
         panel->addChild(_trainReadyRow, 2);
-    } else {
+    }
+    else {
         CCLOG("[TrainingUI] Failed to create _trainReadyRow");
     }
 
 
-    
+
     _trainSelectRow = safeCreateNode();
     if (_trainSelectRow) {
         _trainSelectRow->setPosition(Vec2(20.f, 25.f));
         panel->addChild(_trainSelectRow, 2);
-    } else {
+    }
+    else {
         CCLOG("[TrainingUI] Failed to create _trainSelectRow");
     }
 
@@ -2286,16 +2317,16 @@ void MainScene::refreshTrainingCampUI()
     auto tc = dynamic_cast<TrainingCamp*>(pb.data.get());
     if (!tc) return;
 
-    
+
     if (_trainReadyRow) _trainReadyRow->removeAllChildren();
     if (_trainSelectRow) _trainSelectRow->removeAllChildren();
 
-    
+
     const float kTrainIconSide = 90.0f;
     const float kTrainIconGap = 10.0f;
 
-	
-	auto createReadyIcon = [this, kTrainIconSide](TrainingCamp::TroopType t, int count)->Node* {
+
+    auto createReadyIcon = [this, kTrainIconSide](TrainingCamp::TroopType t, int count)->Node* {
         auto node = safeCreateNode();
         if (!node) return nullptr;
 
@@ -2317,7 +2348,7 @@ void MainScene::refreshTrainingCampUI()
 
         Size iconSize = sp->getContentSize() * scale;
 
-        
+
         char buf[32];
         snprintf(buf, sizeof(buf), "x%d", count);
         auto cntLbl = Label::createWithSystemFont(buf, "Arial", 18);
@@ -2326,30 +2357,30 @@ void MainScene::refreshTrainingCampUI()
         cntLbl->setPosition(Vec2(4.f, iconSize.height - 4.f));
         node->addChild(cntLbl, 2);
 
-        
 
-{
-    int lv = getTroopLevel((int)t);
-    auto lvLbl = Label::createWithSystemFont(StringUtils::format("LV%d", lv), "Arial", 28);
-    lvLbl->setColor(Color3B::BLACK);
-    
-    lvLbl->enableOutline(Color4B::BLACK, 3);
-    lvLbl->setAnchorPoint(Vec2(0.5f, 0.5f));
-    lvLbl->setPosition(Vec2(iconSize.width * 0.5f, iconSize.height * 0.5f));
 
-    
-    float maxW = iconSize.width * 0.95f;
-    float maxH = iconSize.height * 0.60f;
-    float bw = lvLbl->getContentSize().width;
-    float bh = lvLbl->getContentSize().height;
-    float s = 1.0f;
-    if (bw > maxW) s = std::min(s, maxW / std::max(1.0f, bw));
-    if (bh > maxH) s = std::min(s, maxH / std::max(1.0f, bh));
-    lvLbl->setScale(s);
+        {
+            int lv = getTroopLevel((int)t);
+            auto lvLbl = Label::createWithSystemFont(StringUtils::format("LV%d", lv), "Arial", 28);
+            lvLbl->setColor(Color3B::BLACK);
 
-    node->addChild(lvLbl, 2);
-}
-        
+            lvLbl->enableOutline(Color4B::BLACK, 3);
+            lvLbl->setAnchorPoint(Vec2(0.5f, 0.5f));
+            lvLbl->setPosition(Vec2(iconSize.width * 0.5f, iconSize.height * 0.5f));
+
+
+            float maxW = iconSize.width * 0.95f;
+            float maxH = iconSize.height * 0.60f;
+            float bw = lvLbl->getContentSize().width;
+            float bh = lvLbl->getContentSize().height;
+            float s = 1.0f;
+            if (bw > maxW) s = std::min(s, maxW / std::max(1.0f, bw));
+            if (bh > maxH) s = std::min(s, maxH / std::max(1.0f, bh));
+            lvLbl->setScale(s);
+
+            node->addChild(lvLbl, 2);
+        }
+
         auto minusLbl = Label::createWithSystemFont("-", "Arial", 22);
         minusLbl->setColor(Color3B(40, 40, 40));
         auto minusItem = MenuItemLabel::create(minusLbl, [this, t](Ref*) {
@@ -2360,14 +2391,14 @@ void MainScene::refreshTrainingCampUI()
             auto tc2 = dynamic_cast<TrainingCamp*>(pb2.data.get());
             if (!tc2) return;
 
-            
+
             if (tc2->tryRemoveReadyTroop(t)) {
                 _trainLastSig = 0;
                 removeStandTroopOfType((int)t);
                 _saveDirty = true;
                 refreshTrainingCampUI();
             }
-});
+            });
         minusItem->setAnchorPoint(Vec2(1, 1));
         minusItem->setPosition(Vec2(iconSize.width - 4.f, iconSize.height - 4.f));
         auto menu = Menu::create(minusItem, nullptr);
@@ -2378,11 +2409,11 @@ void MainScene::refreshTrainingCampUI()
         return node;
         };
 
-    
+
     float x = 0.f;
     float gap = 10.f;
     if (_trainReadyRow) {
-        
+
         for (int key = 1; key <= 4; ++key) {
             auto t = (TrainingCamp::TroopType)key;
             int cnt = tc->getReadyCount(t);
@@ -2396,7 +2427,7 @@ void MainScene::refreshTrainingCampUI()
         }
     }
 
-    
+
     if (_trainSelectRow) {
         float bx = 0.f;
         for (int key = 1; key <= 4; ++key) {
@@ -2407,35 +2438,35 @@ void MainScene::refreshTrainingCampUI()
             btn->setAnchorPoint(Vec2(0, 0));
             btn->setPosition(Vec2(bx, 0));
             {
-            cocos2d::Size cs = btn->getContentSize();
-            float denom = std::max(1.0f, std::max(cs.width, cs.height));
-            float scale = std::min(1.0f, kTrainIconSide / denom);
-            btn->setScale(scale);
-        }
+                cocos2d::Size cs = btn->getContentSize();
+                float denom = std::max(1.0f, std::max(cs.width, cs.height));
+                float scale = std::min(1.0f, kTrainIconSide / denom);
+                btn->setScale(scale);
+            }
 
-            
 
-{
-    int lv = getTroopLevel((int)t);
-    auto lvLbl = Label::createWithSystemFont(StringUtils::format("LV%d", lv), "Arial", 28);
-    lvLbl->setColor(Color3B::BLACK);
-    
-    lvLbl->enableOutline(Color4B::BLACK, 3);
-    lvLbl->setAnchorPoint(Vec2(0.5f, 0.5f));
-    lvLbl->setPosition(Vec2(btn->getContentSize().width * 0.5f, btn->getContentSize().height * 0.5f));
 
-    
-    float maxW = btn->getContentSize().width * 0.95f;
-    float maxH = btn->getContentSize().height * 0.60f;
-    float bw = lvLbl->getContentSize().width;
-    float bh = lvLbl->getContentSize().height;
-    float s = 1.0f;
-    if (bw > maxW) s = std::min(s, maxW / std::max(1.0f, bw));
-    if (bh > maxH) s = std::min(s, maxH / std::max(1.0f, bh));
-    lvLbl->setScale(s);
+            {
+                int lv = getTroopLevel((int)t);
+                auto lvLbl = Label::createWithSystemFont(StringUtils::format("LV%d", lv), "Arial", 28);
+                lvLbl->setColor(Color3B::BLACK);
 
-    btn->addChild(lvLbl, 2);
-}
+                lvLbl->enableOutline(Color4B::BLACK, 3);
+                lvLbl->setAnchorPoint(Vec2(0.5f, 0.5f));
+                lvLbl->setPosition(Vec2(btn->getContentSize().width * 0.5f, btn->getContentSize().height * 0.5f));
+
+
+                float maxW = btn->getContentSize().width * 0.95f;
+                float maxH = btn->getContentSize().height * 0.60f;
+                float bw = lvLbl->getContentSize().width;
+                float bh = lvLbl->getContentSize().height;
+                float s = 1.0f;
+                if (bw > maxW) s = std::min(s, maxW / std::max(1.0f, bw));
+                if (bh > maxH) s = std::min(s, maxH / std::max(1.0f, bh));
+                lvLbl->setScale(s);
+
+                btn->addChild(lvLbl, 2);
+            }
             btn->addClickEventListener([this, t](Ref*) {
                 SoundManager::playSfxRandom("button_click", 1.0f);
                 if (_trainCampIndex < 0 || _trainCampIndex >= (int)_buildings.size()) return;
@@ -2444,7 +2475,7 @@ void MainScene::refreshTrainingCampUI()
                 auto tc2 = dynamic_cast<TrainingCamp*>(pb2.data.get());
                 if (!tc2) return;
 
-                
+
                 if (tc2->tryAddReadyTroop(t)) {
                     _trainLastSig = 0;
                     spawnStandTroop((int)t);
@@ -2462,7 +2493,7 @@ void MainScene::refreshTrainingCampUI()
         }
     }
 
-    
+
     if (_trainCapLabel) {
         int totalCap = ResourceManager::getPopulationCap();
         int usedHousing = tc->getUsedHousing();
@@ -2471,7 +2502,7 @@ void MainScene::refreshTrainingCampUI()
         _trainCapLabel->setString(buf);
     }
 
-    
+
     int sig = 0;
     const auto& ready = tc->getAllReadyCounts();
     for (const auto& kv : ready) {
@@ -2518,7 +2549,7 @@ void MainScene::restoreStandTroopsFromSave(const SaveData& data)
 
     for (const auto& t : data.trainedTroops)
     {
-        
+
         int r = t.r;
         int c = t.c;
         bool occupied = false;
@@ -2536,7 +2567,7 @@ void MainScene::restoreStandTroopsFromSave(const SaveData& data)
         if (!sp) continue;
 
         Vec2 center(_anchor.x + (c - r) * (_tileW * 0.5f),
-                    _anchor.y - (c + r) * (_tileH * 0.5f));
+            _anchor.y - (c + r) * (_tileH * 0.5f));
         float jx = randomRealSafe(-_tileW * 0.15f, _tileW * 0.15f);
         float jy = randomRealSafe(-_tileH * 0.10f, _tileH * 0.10f);
         Vec2 pos = center + Vec2(jx, _tileH * 0.10f + jy);
@@ -2601,7 +2632,7 @@ cocos2d::Sprite* MainScene::createStandTroopSprite(int troopType) const
         }
     }
 
-    
+
     auto iconPath = TrainingCamp::getTroopIcon((TrainingCamp::TroopType)troopType);
     if (auto sp = Sprite::create(iconPath))
     {
@@ -2615,7 +2646,7 @@ void MainScene::spawnStandTroop(int troopType)
 {
     if (!_world || !_standTroopLayer) return;
 
-    
+
     std::vector<int> barracksIndices;
     for (int i = 0; i < (int)_buildings.size(); ++i)
     {
@@ -2628,7 +2659,7 @@ void MainScene::spawnStandTroop(int troopType)
         return;
     }
 
-    
+
     int chosenR = 0;
     int chosenC = 0;
     bool found = false;
@@ -2658,7 +2689,7 @@ void MainScene::spawnStandTroop(int troopType)
 
     if (!found)
     {
-        
+
         int bi = barracksIndices.front();
         chosenR = _buildings[bi].r;
         chosenC = _buildings[bi].c;
@@ -2667,22 +2698,22 @@ void MainScene::spawnStandTroop(int troopType)
     auto sp = createStandTroopSprite(troopType);
     if (!sp) return;
 
-    
-    Vec2 center(_anchor.x + (chosenC - chosenR) * (_tileW * 0.5f),
-                _anchor.y - (chosenC + chosenR) * (_tileH * 0.5f));
 
-    
+    Vec2 center(_anchor.x + (chosenC - chosenR) * (_tileW * 0.5f),
+        _anchor.y - (chosenC + chosenR) * (_tileH * 0.5f));
+
+
     float jx = randomRealSafe(-_tileW * 0.15f, _tileW * 0.15f);
     float jy = randomRealSafe(-_tileH * 0.10f, _tileH * 0.10f);
     Vec2 pos = center + Vec2(jx, _tileH * 0.10f + jy);
 
-    
+
     float desiredW = _tileW * 0.60f;
     float s = desiredW / std::max(1.0f, sp->getContentSize().width);
     sp->setScale(s);
     sp->setPosition(pos);
 
-    
+
     int z = 5 + chosenR + chosenC;
     _standTroopLayer->addChild(sp, z);
 
@@ -2710,30 +2741,30 @@ void MainScene::setTroopLevel(int unitId, int level)
 
 int MainScene::getLaboratoryMaxTroopLevel(int labLevel, int unitId) const
 {
-    
-    
-    
-    
-    
-    
+
+
+
+
+
+
     labLevel = std::max(1, std::min(5, labLevel));
 
-    if (unitId == 1) { 
+    if (unitId == 1) {
         if (labLevel >= 4) return 3;
         if (labLevel >= 1) return 2;
         return 1;
     }
-    if (unitId == 2) { 
+    if (unitId == 2) {
         if (labLevel >= 4) return 3;
         if (labLevel >= 2) return 2;
         return 1;
     }
-    if (unitId == 3) { 
+    if (unitId == 3) {
         if (labLevel >= 5) return 3;
         if (labLevel >= 3) return 2;
         return 1;
     }
-    if (unitId == 4) { 
+    if (unitId == 4) {
         if (labLevel >= 4) return 2;
         return 1;
     }
@@ -2753,13 +2784,13 @@ void MainScene::updateResearchSystems(float dt)
     if (_activeResearchUnitId <= 0 || _activeResearchRemainSec <= 0.0f || _activeResearchTotalSec <= 0.0f)
         return;
 
-    
+
     float scaled = dt * _timeScale;
     _activeResearchRemainSec = std::max(0.0f, _activeResearchRemainSec - scaled);
 
     if (_activeResearchRemainSec <= 0.0f)
     {
-        
+
         setTroopLevel(_activeResearchUnitId, _activeResearchTargetLevel);
 
         _activeResearchUnitId = 0;
@@ -2769,15 +2800,15 @@ void MainScene::updateResearchSystems(float dt)
 
         _saveDirty = true;
 
-        
+
         if (_trainMask) _trainLastSig = 0;
         if (_researchMask) _researchLastSig = 0;
     }
 
-    
+
     if (_researchMask)
     {
-        
+
         int t = (int)std::round(_activeResearchRemainSec * 10.0f);
         int sig = _activeResearchUnitId * 100000 + _activeResearchTargetLevel * 1000 + t;
         if (sig != _researchLastSig)
@@ -2805,7 +2836,7 @@ void MainScene::openLaboratoryResearchPicker(int buildingIndex)
     auto visibleSize = Director::getInstance()->getVisibleSize();
     auto origin = Director::getInstance()->getVisibleOrigin();
 
-    
+
     _researchMask = LayerColor::create(Color4B(0, 0, 0, 180));
     this->addChild(_researchMask, 260);
 
@@ -2814,7 +2845,7 @@ void MainScene::openLaboratoryResearchPicker(int buildingIndex)
     maskListener->onTouchBegan = [](Touch*, Event*) { return true; };
     _eventDispatcher->addEventListenerWithSceneGraphPriority(maskListener, _researchMask);
 
-    
+
     float panelW = visibleSize.width * 0.90f;
     float panelH = visibleSize.height * 0.85f;
     auto panel = LayerColor::create(Color4B(245, 245, 245, 255), panelW, panelH);
@@ -2822,32 +2853,32 @@ void MainScene::openLaboratoryResearchPicker(int buildingIndex)
     _researchMask->addChild(panel, 1);
     _researchPanel = panel;
 
-    
+
     auto title = Label::createWithSystemFont("Research", "Arial", 26);
     title->setColor(Color3B::BLACK);
     title->setPosition(Vec2(panelW * 0.5f, panelH - 30.f));
     panel->addChild(title, 2);
 
-    
+
     auto closeLbl = Label::createWithSystemFont("X", "Arial", 26);
     closeLbl->setColor(Color3B::BLACK);
     auto closeItem = MenuItemLabel::create(closeLbl, [this](Ref*) {
         SoundManager::playSfxRandom("button_click", 1.0f);
         closeLaboratoryResearchPicker();
-    });
+        });
     closeItem->setPosition(Vec2(panelW - 22.f, panelH - 28.f));
     auto closeMenu = Menu::create(closeItem, nullptr);
     closeMenu->setPosition(Vec2::ZERO);
     panel->addChild(closeMenu, 3);
 
-    
+
     auto hint = Label::createWithSystemFont("Choose a troop to research.", "Arial", 18);
     hint->setColor(Color3B::BLACK);
     hint->setAnchorPoint(Vec2(0, 0.5f));
     hint->setPosition(Vec2(20.f, panelH - 80.f));
     panel->addChild(hint, 2);
 
-    
+
     _researchSelectRow = safeCreateNode();
     if (_researchSelectRow) {
         _researchSelectRow->setPosition(Vec2(20.f, 25.f));
@@ -2906,7 +2937,7 @@ void MainScene::refreshResearchUI()
     auto lab = dynamic_cast<Laboratory*>(pb.data.get());
     if (!lab) return;
 
-    
+
     bool labFunctional = (lab->buildState == Building::STATE_NORMAL);
 
     int labLevel = std::max(1, lab->level);
@@ -2917,7 +2948,7 @@ void MainScene::refreshResearchUI()
     float y = 0.0f;
     float gap = 20.0f;
 
-    
+
     float iconH = 80.0f;
     {
         auto probe = Sprite::create(TrainingCamp::getTroopIcon(TrainingCamp::TROOP_BARBARIAN));
@@ -2930,7 +2961,7 @@ void MainScene::refreshResearchUI()
         auto btn = ui::Button::create(iconPath, iconPath, iconPath);
         if (!btn) continue;
 
-        
+
         float iconScale = 1.0f;
         {
             auto spr = Sprite::create(iconPath);
@@ -2947,32 +2978,32 @@ void MainScene::refreshResearchUI()
         btn->setPosition(Vec2(x, y));
         _researchSelectRow->addChild(btn, 1);
 
-        
-        
-        
+
+
+
         Size rawSz = btn->getContentSize();
         Size bsz = rawSz * iconScale;
 
         int curLv = getTroopLevel(type);
         int maxLv = getLaboratoryMaxTroopLevel(labLevel, type);
 
-        
+
         if (curLv >= maxLv)
         {
             btn->setColor(Color3B(110, 110, 110));
         }
 
-        
-        
+
+
         {
             auto lvLbl = Label::createWithSystemFont(StringUtils::format("LV%d", curLv), "Arial", 28);
             lvLbl->setColor(Color3B::BLACK);
-            
+
             lvLbl->enableOutline(Color4B::BLACK, 3);
             lvLbl->setAnchorPoint(Vec2(0.5f, 0.5f));
             lvLbl->setPosition(Vec2(rawSz.width * 0.5f, rawSz.height * 0.5f));
 
-            
+
             float maxW = rawSz.width * 0.95f;
             float maxH = rawSz.height * 0.60f;
             float bw = lvLbl->getContentSize().width;
@@ -2984,12 +3015,12 @@ void MainScene::refreshResearchUI()
 
             btn->addChild(lvLbl, 3);
         }
-        
-        
-        
+
+
+
         {
             float barW = std::max(60.0f, rawSz.width);
-            float barH = 16.0f; 
+            float barH = 16.0f;
 
             auto barBg = LayerColor::create(Color4B(20, 20, 20, 200), barW, barH);
             barBg->setAnchorPoint(Vec2(0.0f, 0.0f));
@@ -3001,7 +3032,7 @@ void MainScene::refreshResearchUI()
             barFill->setPosition(Vec2(0.0f, 0.0f));
             barBg->addChild(barFill, 1);
 
-            
+
             auto timeLbl = Label::createWithSystemFont("", "Arial", 32);
             timeLbl->setAnchorPoint(Vec2(0.5f, 0.0f));
             timeLbl->setColor(Color3B::WHITE);
@@ -3064,7 +3095,7 @@ void MainScene::refreshResearchUI()
             _saveDirty = true;
             _researchLastSig = 0;
             refreshResearchUI();
-        });
+            });
 
         x += bsz.width + gap;
     }

@@ -1844,6 +1844,8 @@ void BattleScene::deploySelectedTroop(const cocos2d::Vec2& glPos)
 
     
     if (isPosInTroopBar(glPos)) return;
+    if (isPosInTroopBar(_touchDownPos)) return;
+    if (isPosInTroopBar(_mouseDownPos)) return;
 
     if (_selectedTroopType == -1) return;
 
