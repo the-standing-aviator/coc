@@ -165,7 +165,7 @@ bool MainScene::init()
     _world->addChild(_background, 0);
     _backgroundOptions = {
     "backgrounds/village_map.jpg",
-    "backgrounds/village_map2.jpg"
+    "backgrounds/village_map_alt.jpg"
     };
     _backgroundIndex = 0;
     {
