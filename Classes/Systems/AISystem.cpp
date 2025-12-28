@@ -64,7 +64,8 @@ bool AISystem::anyDefenseAlive(const std::vector<EnemyBuildingRuntime>& enemyBui
 
 void AISystem::buildBlockedMap(const std::vector<EnemyBuildingRuntime>& enemyBuildings,
     std::vector<unsigned char>& blocked,
-    bool wallsBlocked) const
+    bool wallsBlocked,
+    bool centerOnly) const
 {
     if (!_gridReady) {
         blocked.clear();
@@ -76,7 +77,7 @@ void AISystem::buildBlockedMap(const std::vector<EnemyBuildingRuntime>& enemyBui
     auto markCell = [&](int rr, int cc) {
         if (rr < 0 || rr >= _rows || cc < 0 || cc >= _cols) return;
         blocked[(size_t)rr * (size_t)_cols + (size_t)cc] = 1;
-        };
+    };
 
     for (const auto& e : enemyBuildings)
     {
@@ -98,99 +99,29 @@ void AISystem::buildBlockedMap(const std::vector<EnemyBuildingRuntime>& enemyBui
             continue;
         }
 
-        // Other buildings occupy 3x3 around center (same as MainScene placement rule).
-        for (int dr = -1; dr <= 1; ++dr)
-            for (int dc = -1; dc <= 1; ++dc)
-                markCell(rr + dr, cc + dc);
+        if (centerOnly)
+        {
+            // Giant special rule: only the building center cell is blocked.
+            markCell(rr, cc);
+        }
+        else
+        {
+            // Default: buildings occupy 3x3 around center (same as MainScene placement rule).
+            for (int dr = -1; dr <= 1; ++dr)
+                for (int dc = -1; dc <= 1; ++dc)
+                    markCell(rr + dr, cc + dc);
+        }
     }
 }
 
-int AISystem::findWallIndexAtCell(int r, int c,
-    const std::vector<EnemyBuildingRuntime>& enemyBuildings) const
+void AISystem::getFootprintCells(const EnemyBuildingRuntime& target,
+    std::vector<Pathfinding::GridPos>& out) const
 {
-    for (int i = 0; i < (int)enemyBuildings.size(); ++i)
-    {
-        const auto& e = enemyBuildings[i];
-        if (!e.building || e.building->hp <= 0 || !e.sprite) continue;
-        if (e.id != 10) continue;
+    out.clear();
+    if (!_gridReady) return;
 
-        int rr = e.r;
-        int cc = e.c;
-        if (rr < 0 || rr >= _rows || cc < 0 || cc >= _cols)
-        {
-            auto g = worldToGrid(e.pos);
-            rr = g.r;
-            cc = g.c;
-        }
-        if (rr == r && cc == c) return i;
-    }
-    return -1;
-}
-
-int AISystem::pickTargetIndex(const UnitBase& unit,
-    const Vec2& unitPos,
-    const std::vector<EnemyBuildingRuntime>& enemyBuildings) const
-{
-    // Target preference rules (per your requirement):
-    // 1) Bomber: nearest wall
-    // 2) Giant: only defenses; if none left then nearest non-wall building
-    // 3) Others: nearest non-wall building
-    // 4) Barbarian exception: can also target walls if they are the nearest
-
-    const bool defensesExist = anyDefenseAlive(enemyBuildings);
-
-    int best = -1;
-    float bestDist = 1e30f;
-
-    auto accept = [&](int buildingId) -> bool {
-        if (isBomber(unit)) return buildingId == 10;
-
-        if (isGiant(unit))
-        {
-            if (defensesExist) return (buildingId == 1 || buildingId == 2);
-            return buildingId != 10; // after defenses gone
-        }
-
-        if (isBarbarian(unit))
-        {
-            // Barbarian can hit everything.
-            return true;
-        }
-
-        // default: exclude walls
-        return buildingId != 10;
-        };
-
-    for (int i = 0; i < (int)enemyBuildings.size(); ++i)
-    {
-        const auto& e = enemyBuildings[i];
-        if (!e.building || e.building->hp <= 0 || !e.sprite) continue;
-        if (!accept(e.id)) continue;
-
-        float d = e.pos.distance(unitPos);
-        if (d < bestDist)
-        {
-            bestDist = d;
-            best = i;
-        }
-    }
-
-    // If Giant has no defenses AND there is no non-wall building left, do nothing.
-    // If other (non-barbarian) has no non-wall building, do nothing.
-    return best;
-}
-
-Pathfinding::GridPos AISystem::pickBestApproachCell(const UnitBase& unit,
-    const EnemyBuildingRuntime& target,
-    const std::vector<unsigned char>& blocked) const
-{
-    // Goal cell is blocked by the building itself.
-    // We need an approach cell (passable) from which the unit can attack.
-    // - Melee units: pick a passable cell adjacent to the building footprint (wall=1 cell, others=3x3)
-    // - Ranged units: pick a cell within attackRange.
     int tr = target.r;
     int tc = target.c;
-
     if (tr < 0 || tr >= _rows || tc < 0 || tc >= _cols)
     {
         auto g = worldToGrid(target.pos);
@@ -198,72 +129,456 @@ Pathfinding::GridPos AISystem::pickBestApproachCell(const UnitBase& unit,
         tc = g.c;
     }
 
-    Vec2 targetWorld = target.sprite ? target.sprite->getPosition() : target.pos;
+    auto pushIfInside = [&](int rr, int cc) {
+        if (rr < 0 || rr >= _rows || cc < 0 || cc >= _cols) return;
+        out.push_back({ rr, cc });
+    };
 
-    Pathfinding::GridPos best{ tr, tc };
-    float bestScore = 1e30f;
+    if (target.id == 10)
+    {
+        pushIfInside(tr, tc);
+        return;
+    }
 
-    auto passable = [&](int rr, int cc) -> bool {
+    for (int dr = -1; dr <= 1; ++dr)
+        for (int dc = -1; dc <= 1; ++dc)
+            pushIfInside(tr + dr, tc + dc);
+}
+
+Pathfinding::GridPos AISystem::getCenterCell(const EnemyBuildingRuntime& target) const
+{
+    if (!_gridReady) return { 0, 0 };
+
+    int tr = target.r;
+    int tc = target.c;
+    if (tr < 0 || tr >= _rows || tc < 0 || tc >= _cols)
+    {
+        auto g = worldToGrid(target.pos);
+        tr = g.r;
+        tc = g.c;
+    }
+    return { tr, tc };
+}
+
+bool AISystem::inAttackRangeCells(const UnitBase& unit,
+    const Pathfinding::GridPos& unitCell,
+    const EnemyBuildingRuntime& target) const
+{
+    if (!_gridReady) return false;
+
+    // User requirement:
+    // - Melee units (Barbarian/Giant) must enter the target building's CENTER cell to attack.
+    // - Archer range is measured ONLY against the target building's CENTER cell (<=3 tiles).
+    // - Walls are a special case: units cannot enter a wall cell, so melee attacks walls from 1 tile away.
+
+    Pathfinding::GridPos center = getCenterCell(target);
+    int dr = std::abs(unitCell.r - center.r);
+    int dc = std::abs(unitCell.c - center.c);
+    int cheb = std::max(dr, dc);
+
+    if (target.id == 10)
+    {
+        // Wall
+        if (isArcher(unit)) return (cheb <= 3);
+        return (cheb <= 1);
+    }
+
+    if (isArcher(unit)) return (cheb <= 3);
+    // Melee must be exactly at center.
+    return (cheb == 0);
+}
+
+void AISystem::collectApproachCells(const UnitBase& unit,
+    const EnemyBuildingRuntime& target,
+    const std::vector<unsigned char>& blocked,
+    std::vector<Pathfinding::GridPos>& out) const
+{
+    out.clear();
+    if (!_gridReady) return;
+
+    std::vector<Pathfinding::GridPos> footprint;
+    getFootprintCells(target, footprint);
+    if (footprint.empty()) return;
+
+    auto isPassable = [&](int rr, int cc) -> bool {
         if (rr < 0 || rr >= _rows || cc < 0 || cc >= _cols) return false;
-        int idx = rr * _cols + cc;
-        if (idx < 0 || idx >= (int)blocked.size()) return false;
+        size_t idx = (size_t)rr * (size_t)_cols + (size_t)cc;
+        if (idx >= blocked.size()) return false;
         return blocked[idx] == 0;
+    };
+
+    // Build a quick lookup for footprint cells.
+    std::vector<unsigned char> isFoot((size_t)_rows * (size_t)_cols, 0);
+    for (const auto& bc : footprint)
+    {
+        size_t idx = (size_t)bc.r * (size_t)_cols + (size_t)bc.c;
+        if (idx < isFoot.size()) isFoot[idx] = 1;
+    }
+
+    std::vector<unsigned char> visited((size_t)_rows * (size_t)_cols, 0);
+    auto pushUnique = [&](int rr, int cc) {
+        if (!isPassable(rr, cc)) return;
+        size_t idx = (size_t)rr * (size_t)_cols + (size_t)cc;
+        if (idx >= visited.size()) return;
+        if (visited[idx]) return;
+        visited[idx] = 1;
+        out.push_back({ rr, cc });
+    };
+
+    // Collect all walkable cells where the unit is able to attack the target.
+    // Archer: within 3 tiles; Other units: within 1 tile.
+    const int range = isArcher(unit) ? 3 : 1;
+    for (const auto& bc : footprint)
+    {
+        for (int dr = -range; dr <= range; ++dr)
+        {
+            for (int dc = -range; dc <= range; ++dc)
+            {
+                // Tile-based Chebyshev distance.
+                if (std::max(std::abs(dr), std::abs(dc)) > range) continue;
+
+                int rr = bc.r + dr;
+                int cc = bc.c + dc;
+                if (rr < 0 || rr >= _rows || cc < 0 || cc >= _cols) continue;
+                size_t idx = (size_t)rr * (size_t)_cols + (size_t)cc;
+                if (idx < isFoot.size() && isFoot[idx]) continue; // cannot stand inside the target
+                pushUnique(rr, cc);
+            }
+        }
+    }
+}
+
+int AISystem::pickWallToBreak(const UnitBase& unit,
+    const Pathfinding::GridPos& unitCell,
+    const Pathfinding::GridPos& mainTargetCenter,
+    const std::vector<EnemyBuildingRuntime>& enemyBuildings,
+    const std::vector<unsigned char>& blockedHard) const
+{
+    if (!_gridReady) return -1;
+
+    // Melee units are allowed to break walls when the main target is unreachable.
+    if (isArcher(unit) || isBomber(unit)) return -1;
+
+    std::vector<unsigned char> blk = blockedHard;
+    if ((int)blk.size() != _rows * _cols)
+        blk.assign((size_t)_rows * (size_t)_cols, 0);
+
+    // Ensure start is passable.
+    int sidx = unitCell.r * _cols + unitCell.c;
+    if (sidx >= 0 && sidx < (int)blk.size()) blk[sidx] = 0;
+
+    auto isPassable = [&](int rr, int cc) -> bool {
+        if (rr < 0 || rr >= _rows || cc < 0 || cc >= _cols) return false;
+        size_t idx = (size_t)rr * (size_t)_cols + (size_t)cc;
+        if (idx >= blk.size()) return false;
+        return blk[idx] == 0;
+    };
+
+    auto chebDist = [&](const Pathfinding::GridPos& a, const Pathfinding::GridPos& b) -> int {
+        return std::max(std::abs(a.r - b.r), std::abs(a.c - b.c));
+    };
+
+    int bestIdx = -1;
+    int bestScore = INT_MAX;
+    int bestWallDist = INT_MAX;
+
+    // For each alive wall, try to find a reachable approach cell (4-neighborhood) and score it.
+    for (int i = 0; i < (int)enemyBuildings.size(); ++i)
+    {
+        const auto& e = enemyBuildings[i];
+        if (e.id != 10) continue;
+        if (!e.building || e.building->hp <= 0 || !e.sprite) continue;
+
+        Pathfinding::GridPos wcell = getCenterCell(e);
+
+        // Candidate approach cells (4-dir). We don't allow entering the wall cell.
+        Pathfinding::GridPos neigh[4] = {
+            { wcell.r - 1, wcell.c },
+            { wcell.r + 1, wcell.c },
+            { wcell.r, wcell.c - 1 },
+            { wcell.r, wcell.c + 1 }
         };
 
-    // Melee: ring around footprint
-    if (isMelee(unit))
-    {
-        int inner = (target.id == 10) ? 0 : 1; // wall: center only; others: 3x3
-        int outer = inner + 1;                 // ring thickness 1
-
-        // Enumerate ring cells around (tr,tc)
-        for (int dr = -outer; dr <= outer; ++dr)
+        int bestLen = INT_MAX;
+        for (const auto& g : neigh)
         {
-            for (int dc = -outer; dc <= outer; ++dc)
-            {
-                // skip interior (occupied footprint)
-                if (std::abs(dr) <= inner && std::abs(dc) <= inner) continue;
+            if (!isPassable(g.r, g.c)) continue;
+            auto path = Pathfinding::findPathAStar(_rows, _cols, unitCell, g, blk, false, 20000);
+            if (path.empty()) continue;
+            int len = (int)path.size();
+            if (len < bestLen) bestLen = len;
+            if (bestLen <= 2) break;
+        }
 
-                int rr = tr + dr;
-                int cc = tc + dc;
-                if (!passable(rr, cc)) continue;
+        if (bestLen == INT_MAX) continue;
 
-                Vec2 w = gridToWorld(rr, cc);
-                float score = w.distance(targetWorld) + (float)(std::abs(dr) + std::abs(dc)) * 2.0f;
-                if (score < bestScore)
-                {
-                    bestScore = score;
-                    best = { rr, cc };
-                }
-            }
+        int wallDistToTarget = chebDist(wcell, mainTargetCenter);
+
+        // Score: prioritize reachable short paths, then walls closer to the target.
+        int score = bestLen * 10 + wallDistToTarget;
+        if (score < bestScore || (score == bestScore && wallDistToTarget < bestWallDist))
+        {
+            bestScore = score;
+            bestWallDist = wallDistToTarget;
+            bestIdx = i;
+        }
+    }
+
+    return bestIdx;
+}
+
+int AISystem::pickTargetIndex(const UnitBase& unit,
+    const Pathfinding::GridPos& unitCell,
+    const std::vector<EnemyBuildingRuntime>& enemyBuildings,
+    const std::vector<unsigned char>& blocked) const
+{
+    // IMPORTANT CHANGE:
+    // Use a stable distance measure (Chebyshev to the target CENTER cell) instead of requiring
+    // an existing A* path. This prevents "no target" when buildings are fully enclosed by walls.
+    // Melee units will break walls dynamically when needed.
+
+    (void)blocked; // unused (kept for signature compatibility)
+
+    const bool defensesExist = anyDefenseAlive(enemyBuildings);
+
+    auto chebDist = [&](const Pathfinding::GridPos& a, const Pathfinding::GridPos& b) -> int {
+        return std::max(std::abs(a.r - b.r), std::abs(a.c - b.c));
+    };
+
+    auto isValid = [&](const EnemyBuildingRuntime& e) -> bool {
+        return (e.building && e.building->hp > 0 && e.sprite);
+    };
+
+    int best = -1;
+    int bestD = INT_MAX;
+
+    // Bomber: prefers walls.
+    if (isBomber(unit))
+    {
+        for (int i = 0; i < (int)enemyBuildings.size(); ++i)
+        {
+            const auto& e = enemyBuildings[i];
+            if (!isValid(e)) continue;
+            if (e.id != 10) continue;
+            int d = chebDist(unitCell, getCenterCell(e));
+            if (d < bestD) { bestD = d; best = i; }
+        }
+        if (best >= 0) return best;
+        // Fallback: any non-wall.
+        for (int i = 0; i < (int)enemyBuildings.size(); ++i)
+        {
+            const auto& e = enemyBuildings[i];
+            if (!isValid(e)) continue;
+            if (e.id == 10) continue;
+            int d = chebDist(unitCell, getCenterCell(e));
+            if (d < bestD) { bestD = d; best = i; }
         }
         return best;
     }
 
-    // Ranged: within attack range
-    int k = (int)std::ceil(std::max(1.0f, unit.attackRange / std::max(8.0f, _cellSizePx)));
-    k = std::min(k + 1, 8);
-
-    for (int dr = -k; dr <= k; ++dr)
+    // Giant: prefers defenses if any exist.
+    if (isGiant(unit) && defensesExist)
     {
-        for (int dc = -k; dc <= k; ++dc)
+        for (int i = 0; i < (int)enemyBuildings.size(); ++i)
         {
-            int rr = tr + dr;
-            int cc = tc + dc;
-            if (!passable(rr, cc)) continue;
+            const auto& e = enemyBuildings[i];
+            if (!isValid(e)) continue;
+            if (!(e.id == 1 || e.id == 2)) continue;
+            int d = chebDist(unitCell, getCenterCell(e));
+            if (d < bestD) { bestD = d; best = i; }
+        }
+        if (best >= 0) return best;
+    }
 
-            Vec2 w = gridToWorld(rr, cc);
-            if (w.distance(targetWorld) > unit.attackRange * 0.98f) continue;
+    // Default: any non-wall building.
+    for (int i = 0; i < (int)enemyBuildings.size(); ++i)
+    {
+        const auto& e = enemyBuildings[i];
+        if (!isValid(e)) continue;
+        if (e.id == 10) continue;
+        int d = chebDist(unitCell, getCenterCell(e));
+        if (d < bestD) { bestD = d; best = i; }
+    }
 
-            float score = w.distance(targetWorld) + (float)(std::abs(dr) + std::abs(dc)) * 3.0f;
-            if (score < bestScore)
+    return best;
+}
+
+bool AISystem::buildBestPathForTarget(const UnitBase& unit,
+    const Pathfinding::GridPos& start,
+    const EnemyBuildingRuntime& target,
+    const std::vector<unsigned char>& blockedHard,
+    std::vector<Pathfinding::GridPos>& outPath) const
+{
+    outPath.clear();
+    if (!_gridReady) return false;
+
+    // Build a local blocked map that we can tweak (same idea as recomputePath).
+    std::vector<unsigned char> blk = blockedHard;
+    if ((int)blk.size() != _rows * _cols)
+        blk.assign((size_t)_rows * (size_t)_cols, 0);
+
+    // Start must be passable.
+    int sidx = start.r * _cols + start.c;
+    if (sidx >= 0 && sidx < (int)blk.size()) blk[sidx] = 0;
+
+    std::vector<Pathfinding::GridPos> goals;
+
+    if (target.id == 10)
+    {
+        // Wall: use normal approach cells.
+        collectApproachCells(unit, target, blk, goals);
+    }
+    else if (isArcher(unit))
+    {
+        // Archer: any passable cell within 3 tiles to the target CENTER cell.
+        Pathfinding::GridPos center = getCenterCell(target);
+        auto isPassable = [&](int rr, int cc) -> bool {
+            if (rr < 0 || rr >= _rows || cc < 0 || cc >= _cols) return false;
+            size_t idx = (size_t)rr * (size_t)_cols + (size_t)cc;
+            if (idx >= blk.size()) return false;
+            return blk[idx] == 0;
+        };
+
+        for (int dr = -3; dr <= 3; ++dr)
+        {
+            for (int dc = -3; dc <= 3; ++dc)
             {
-                bestScore = score;
-                best = { rr, cc };
+                if (std::max(std::abs(dr), std::abs(dc)) > 3) continue;
+                int rr = center.r + dr;
+                int cc = center.c + dc;
+                if (!isPassable(rr, cc)) continue;
+                goals.push_back({ rr, cc });
             }
         }
     }
-    return best;
+    else
+    {
+        // Melee: must enter the target CENTER cell to attack.
+        // Temporarily mark the target 3x3 footprint as passable.
+        Pathfinding::GridPos center = getCenterCell(target);
+        for (int dr = -1; dr <= 1; ++dr)
+        {
+            for (int dc = -1; dc <= 1; ++dc)
+            {
+                int rr = center.r + dr;
+                int cc = center.c + dc;
+                if (rr < 0 || rr >= _rows || cc < 0 || cc >= _cols) continue;
+                size_t idx = (size_t)rr * (size_t)_cols + (size_t)cc;
+                if (idx < blk.size()) blk[idx] = 0;
+            }
+        }
+        goals.push_back(center);
+    }
+
+    std::vector<Pathfinding::GridPos> bestPath;
+    int bestLen = INT_MAX;
+
+    // Keep the node cap moderate because we may call this for multiple candidates.
+    const int maxNodes = 8000;
+    for (const auto& g : goals)
+    {
+        auto path = Pathfinding::findPathAStar(_rows, _cols, start, g, blk, false, maxNodes);
+        if (path.empty()) continue;
+        int len = (int)path.size();
+        if (len < bestLen)
+        {
+            bestLen = len;
+            bestPath = std::move(path);
+        }
+        if (bestLen <= 2) break;
+    }
+
+    if (bestPath.empty()) return false;
+
+    outPath = std::move(bestPath);
+    return true;
+}
+
+int AISystem::pickReachableTargetIndex(const UnitBase& unit,
+    const Pathfinding::GridPos& unitCell,
+    const std::vector<EnemyBuildingRuntime>& enemyBuildings,
+    const std::vector<unsigned char>& blockedHard,
+    std::vector<Pathfinding::GridPos>* outBestPath) const
+{
+    if (!_gridReady) return -1;
+
+    auto isValid = [&](const EnemyBuildingRuntime& e) -> bool {
+        return (e.building && e.building->hp > 0 && e.sprite);
+    };
+
+    const bool defensesExist = anyDefenseAlive(enemyBuildings);
+
+    // Build candidate list following the same priority rules as pickTargetIndex(),
+    // but only accept those that are actually reachable by A*.
+    std::vector<int> candidates;
+    candidates.reserve(enemyBuildings.size());
+
+    if (isBomber(unit))
+    {
+        // Bomber uses its own special behavior and should not enter this function.
+        return -1;
+    }
+
+    if (isGiant(unit) && defensesExist)
+    {
+        for (int i = 0; i < (int)enemyBuildings.size(); ++i)
+        {
+            const auto& e = enemyBuildings[i];
+            if (!isValid(e)) continue;
+            if (e.id == 10) continue;
+            if (e.id == 1 || e.id == 2) candidates.push_back(i);
+        }
+    }
+
+    // Fallback / default set: all non-wall buildings.
+    if (candidates.empty())
+    {
+        for (int i = 0; i < (int)enemyBuildings.size(); ++i)
+        {
+            const auto& e = enemyBuildings[i];
+            if (!isValid(e)) continue;
+            if (e.id == 10) continue;
+            candidates.push_back(i);
+        }
+    }
+
+    if (candidates.empty()) return -1;
+
+    // Sort candidates by a cheap heuristic first (Chebyshev to center), then test reachability.
+    auto chebDist = [&](int idx) -> int {
+        Pathfinding::GridPos c = getCenterCell(enemyBuildings[idx]);
+        return std::max(std::abs(unitCell.r - c.r), std::abs(unitCell.c - c.c));
+    };
+    std::sort(candidates.begin(), candidates.end(), [&](int a, int b) {
+        return chebDist(a) < chebDist(b);
+    });
+
+    int bestIdx = -1;
+    int bestLen = INT_MAX;
+    std::vector<Pathfinding::GridPos> bestPath;
+
+    for (int idx : candidates)
+    {
+        std::vector<Pathfinding::GridPos> path;
+        if (!buildBestPathForTarget(unit, unitCell, enemyBuildings[idx], blockedHard, path))
+            continue;
+
+        int len = (int)path.size();
+        if (len < bestLen)
+        {
+            bestLen = len;
+            bestIdx = idx;
+            bestPath = std::move(path);
+        }
+
+        // Early stop: very close target.
+        if (bestLen <= 3) break;
+    }
+
+    if (bestIdx >= 0 && outBestPath)
+        *outBestPath = std::move(bestPath);
+
+    return bestIdx;
 }
 
 void AISystem::recomputePath(BattleUnitRuntime& u,
@@ -274,43 +589,100 @@ void AISystem::recomputePath(BattleUnitRuntime& u,
 
     Pathfinding::GridPos start = worldToGrid(u.sprite->getPosition());
 
-    // Build a local blocked map we can tweak (e.g. allow goal cell passable)
+    // Build a local blocked map we can tweak
     std::vector<unsigned char> blk = blocked;
     if ((int)blk.size() != _rows * _cols)
         blk.assign((size_t)_rows * (size_t)_cols, 0);
 
-    // Normal: find an approach cell (melee: adjacent to footprint; ranged: within range)
-    Pathfinding::GridPos goal = pickBestApproachCell(*u.unit, target, blk);
-
-    // start must be passable
+    // Start must be passable
     int sidx = start.r * _cols + start.c;
     if (sidx >= 0 && sidx < (int)blk.size()) blk[sidx] = 0;
 
-    auto path = Pathfinding::findPathAStar(_rows, _cols, start, goal, blk, false, 20000);
+    // Build goal cells based on unit type and the "center-cell" attack rule.
+    std::vector<Pathfinding::GridPos> goals;
 
-    u.path = std::move(path);
+    if (target.id == 10)
+    {
+        // Wall: use normal approach cells (stand next to the wall, or within range for archer).
+        collectApproachCells(*u.unit, target, blk, goals);
+    }
+    else if (isArcher(*u.unit))
+    {
+        // Archer: any passable cell within 3 tiles to the target CENTER cell.
+        Pathfinding::GridPos center = getCenterCell(target);
+        auto isPassable = [&](int rr, int cc) -> bool {
+            if (rr < 0 || rr >= _rows || cc < 0 || cc >= _cols) return false;
+            size_t idx = (size_t)rr * (size_t)_cols + (size_t)cc;
+            if (idx >= blk.size()) return false;
+            return blk[idx] == 0;
+        };
+
+        for (int dr = -3; dr <= 3; ++dr)
+        {
+            for (int dc = -3; dc <= 3; ++dc)
+            {
+                if (std::max(std::abs(dr), std::abs(dc)) > 3) continue;
+                int rr = center.r + dr;
+                int cc = center.c + dc;
+                if (!isPassable(rr, cc)) continue;
+                goals.push_back({ rr, cc });
+            }
+        }
+    }
+    else
+    {
+        // Melee: must enter the target CENTER cell to attack.
+        // To allow this, temporarily mark the target footprint as passable.
+        Pathfinding::GridPos center = getCenterCell(target);
+        for (int dr = -1; dr <= 1; ++dr)
+        {
+            for (int dc = -1; dc <= 1; ++dc)
+            {
+                int rr = center.r + dr;
+                int cc = center.c + dc;
+                if (rr < 0 || rr >= _rows || cc < 0 || cc >= _cols) continue;
+                size_t idx = (size_t)rr * (size_t)_cols + (size_t)cc;
+                if (idx < blk.size()) blk[idx] = 0;
+            }
+        }
+        goals.push_back(center);
+    }
+
+    std::vector<Pathfinding::GridPos> bestPath;
+    int bestLen = INT_MAX;
+
+    for (const auto& g : goals)
+    {
+        auto path = Pathfinding::findPathAStar(_rows, _cols, start, g, blk, false, 20000);
+        if (path.empty()) continue;
+        int len = (int)path.size();
+        if (len < bestLen)
+        {
+            bestLen = len;
+            bestPath = std::move(path);
+        }
+        if (bestLen <= 2) break;
+    }
+
+    u.path = std::move(bestPath);
     u.pathCursor = 0;
 
     if (!u.path.empty() && u.path[0].r == start.r && u.path[0].c == start.c)
         u.pathCursor = 1;
 
-    u.repathCD = 0.35f;
+    // If no path exists, slow down repathing a bit to avoid thrashing.
+    u.repathCD = u.path.empty() ? 0.80f : 0.35f;
 }
 
 void AISystem::stepAlongPath(BattleUnitRuntime& u,
-    const EnemyBuildingRuntime& target,
     float dt)
 {
     if (!u.sprite || !u.unit) return;
+    if (!_gridReady) return;
 
-    if (!_gridReady || u.path.empty() || u.pathCursor >= (int)u.path.size())
+    if (u.path.empty() || u.pathCursor >= (int)u.path.size())
     {
-        // fallback: direct step to target (still respects stop distance)
-        Vec2 cur = u.sprite->getPosition();
-        Vec2 dst = target.sprite ? target.sprite->getPosition() : target.pos;
-        float stop = std::max(8.0f, u.unit->attackRange * 0.85f);
-        Vec2 next = Pathfinding::stepTowards(cur, dst, u.unit->moveSpeed * dt, stop);
-        u.sprite->setPosition(next);
+        // No path: do not move (do NOT walk through walls/buildings).
         return;
     }
 
@@ -318,8 +690,7 @@ void AISystem::stepAlongPath(BattleUnitRuntime& u,
     auto cell = u.path[u.pathCursor];
     Vec2 waypoint = gridToWorld(cell.r, cell.c);
 
-    float stop = 0.0f; // waypoint is an intermediate; don't stop short
-    Vec2 next = Pathfinding::stepTowards(cur, waypoint, u.unit->moveSpeed * dt, stop);
+    Vec2 next = Pathfinding::stepTowards(cur, waypoint, u.unit->moveSpeed * dt, 0.0f);
     u.sprite->setPosition(next);
 
     if (next.distance(waypoint) <= 6.0f)
@@ -334,151 +705,259 @@ void AISystem::updateOneUnit(float dt, BattleUnitRuntime& u,
     if (!u.unit || !u.sprite) return;
     if (u.unit->isDead()) return;
 
-    // keep hp bar visible/updated
-    CombatSystem::ensureHpBar(u.sprite, u.unit->hp, u.unit->hpMax, true);
-
     u.unit->tickAttack(dt);
 
-    // Build blocked maps (hard: walls block; soft: walls treated passable for "break wall" detection)
+    // Build a blocked map: walls are solid obstacles (units can NOT enter wall cells).
     std::vector<unsigned char> blockedHard;
-    std::vector<unsigned char> blockedSoft;
     if (_gridReady)
     {
-        buildBlockedMap(enemyBuildings, blockedHard, true);
-        buildBlockedMap(enemyBuildings, blockedSoft, false);
-
-        // ensure unit's own cell is passable
+        // Giant special path rule: only building center cells are blocked.
+        buildBlockedMap(enemyBuildings, blockedHard, true, isGiant(*u.unit));
+        // Ensure unit's own cell is passable.
         auto st = worldToGrid(u.sprite->getPosition());
         int idx = st.r * _cols + st.c;
         if (idx >= 0 && idx < (int)blockedHard.size()) blockedHard[idx] = 0;
-        if (idx >= 0 && idx < (int)blockedSoft.size()) blockedSoft[idx] = 0;
     }
 
-    // validate / repick target
-    bool needPick = false;
-    if (u.targetIndex < 0 || u.targetIndex >= (int)enemyBuildings.size()) needPick = true;
-    else {
-        auto& t = enemyBuildings[u.targetIndex];
-        if (!t.building || t.building->hp <= 0 || !t.sprite) needPick = true;
-    }
+    auto unitCell = worldToGrid(u.sprite->getPosition());
 
-    if (needPick)
-    {
-        u.targetIndex = pickTargetIndex(*u.unit, u.sprite->getPosition(), enemyBuildings);
-        u.path.clear();
-        u.pathCursor = 0;
-        u.repathCD = 0.0f;
-    }
+    auto isValidIndex = [&](int idx) -> bool {
+        if (idx < 0 || idx >= (int)enemyBuildings.size()) return false;
+        const auto& t = enemyBuildings[idx];
+        return (t.building && t.building->hp > 0 && t.sprite);
+    };
 
-    if (u.targetIndex < 0) return;
-
-    auto& tgt = enemyBuildings[u.targetIndex];
-
-    // keep building hp bar visible/updated
-    if (tgt.sprite && tgt.building)
-        CombatSystem::ensureHpBar(tgt.sprite, tgt.building->hp, tgt.building->hpMax, false);
-
-    // 0) Bomber special: explode at wall
+    // Special: bomber keeps old behavior (only targets walls, no main-target logic).
     if (isBomber(*u.unit))
     {
-        if (CombatSystem::tryBomberExplode(*u.unit, u.sprite, tgt, enemyBuildings))
+        u.breakingWall = false;
+        u.mainTargetIndex = -1;
+
+        if (!isValidIndex(u.targetIndex))
         {
+            u.targetIndex = pickTargetIndex(*u.unit, unitCell, enemyBuildings, blockedHard);
             u.path.clear();
             u.pathCursor = 0;
             u.repathCD = 0.0f;
-            return;
+        }
+
+        if (!isValidIndex(u.targetIndex)) return;
+        auto& tgt = enemyBuildings[u.targetIndex];
+
+        if (tgt.id == 10 && inAttackRangeCells(*u.unit, unitCell, tgt))
+        {
+            if (CombatSystem::bomberExplodeNoRange(*u.unit, u.sprite, tgt, enemyBuildings))
+            {
+                u.path.clear();
+                u.pathCursor = 0;
+                u.repathCD = 0.0f;
+                u.targetIndex = -1;
+                return;
+            }
+        }
+
+        u.repathCD -= dt;
+        if (u.repathCD <= 0.0f)
+        {
+            recomputePath(u, tgt, blockedHard);
+            u.repathCD = std::max(u.repathCD, 0.05f);
+        }
+        stepAlongPath(u, dt);
+        return;
+    }
+
+    // Ensure we have a valid main target.
+    if (!isValidIndex(u.mainTargetIndex))
+    {
+        // Prefer a target that is actually reachable by A*.
+        std::vector<Pathfinding::GridPos> bestPath;
+        int reachable = pickReachableTargetIndex(*u.unit, unitCell, enemyBuildings, blockedHard, &bestPath);
+        if (reachable >= 0)
+        {
+            u.mainTargetIndex = reachable;
+            u.breakingWall = false;
+            u.targetIndex = reachable;
+            u.path = std::move(bestPath);
+            u.pathCursor = 0;
+            if (!u.path.empty() && u.path[0].r == unitCell.r && u.path[0].c == unitCell.c)
+                u.pathCursor = 1;
+            u.repathCD = 0.35f;
+        }
+        else
+        {
+            // No reachable building right now (likely fully enclosed). Fall back to
+            // the priority rule target and start wall-breaking if needed.
+            u.mainTargetIndex = pickTargetIndex(*u.unit, unitCell, enemyBuildings, blockedHard);
+            u.breakingWall = false;
+            u.targetIndex = u.mainTargetIndex;
+            u.path.clear();
+            u.pathCursor = 0;
+            u.repathCD = 0.0f;
         }
     }
 
-    // 1) try normal attack (range + cooldown + damage + float text)
-    if (!isBomber(*u.unit) && CombatSystem::tryUnitAttackBuilding(*u.unit, u.sprite, *tgt.building, tgt.sprite))
+    if (!isValidIndex(u.mainTargetIndex))
     {
-        // if building dies, clear path soon
-        if (tgt.building->hp <= 0)
+        u.targetIndex = -1;
+        return;
+    }
+
+    // If we are breaking a wall but the wall is gone, return to the main target.
+    if (u.breakingWall)
+    {
+        if (!isValidIndex(u.targetIndex) || enemyBuildings[u.targetIndex].id != 10)
         {
-            u.path.clear();
-            u.pathCursor = 0;
-            u.repathCD = 0.0f;
+            // A wall we were targeting got destroyed (possibly by other units).
+            // Re-evaluate the best reachable priority target immediately.
+            u.breakingWall = false;
+            std::vector<Pathfinding::GridPos> bestPath;
+            int reachable = pickReachableTargetIndex(*u.unit, unitCell, enemyBuildings, blockedHard, &bestPath);
+            if (reachable >= 0)
+            {
+                u.mainTargetIndex = reachable;
+                u.targetIndex = reachable;
+                u.path = std::move(bestPath);
+                u.pathCursor = 0;
+                if (!u.path.empty() && u.path[0].r == unitCell.r && u.path[0].c == unitCell.c)
+                    u.pathCursor = 1;
+                u.repathCD = 0.35f;
+            }
+            else
+            {
+                u.targetIndex = u.mainTargetIndex;
+                u.path.clear();
+                u.pathCursor = 0;
+                u.repathCD = 0.0f;
+            }
+        }
+    }
+
+    // Current target = wall (temporary) or main target.
+    int curIdx = u.breakingWall ? u.targetIndex : u.mainTargetIndex;
+    if (!isValidIndex(curIdx))
+    {
+        // If current target invalid, reset and pick again next tick.
+        u.targetIndex = -1;
+        u.mainTargetIndex = -1;
+        u.breakingWall = false;
+        return;
+    }
+    u.targetIndex = curIdx;
+    auto& tgt = enemyBuildings[curIdx];
+
+    // 1) Attack if in range (center-based rules).
+    if (inAttackRangeCells(*u.unit, unitCell, tgt))
+    {
+        if (tgt.building && tgt.sprite)
+        {
+            CombatSystem::unitHitBuildingNoRange(*u.unit, u.sprite, *tgt.building, tgt.sprite);
+            if (tgt.building->hp <= 0)
+            {
+                u.path.clear();
+                u.pathCursor = 0;
+                u.repathCD = 0.0f;
+
+                if (u.breakingWall)
+                {
+                    // Wall destroyed: immediately switch to the nearest REACHABLE priority target.
+                    // This prevents wasting time hitting additional walls once a path exists.
+                    Pathfinding::GridPos wcell = getCenterCell(tgt);
+                    size_t widx = (size_t)wcell.r * (size_t)_cols + (size_t)wcell.c;
+                    if (widx < blockedHard.size()) blockedHard[widx] = 0;
+
+                    u.breakingWall = false;
+
+                    std::vector<Pathfinding::GridPos> bestPath;
+                    int reachable = pickReachableTargetIndex(*u.unit, unitCell, enemyBuildings, blockedHard, &bestPath);
+                    if (reachable >= 0)
+                    {
+                        u.mainTargetIndex = reachable;
+                        u.targetIndex = reachable;
+                        u.path = std::move(bestPath);
+                        u.pathCursor = 0;
+                        if (!u.path.empty() && u.path[0].r == unitCell.r && u.path[0].c == unitCell.c)
+                            u.pathCursor = 1;
+                        u.repathCD = 0.35f;
+                    }
+                    else
+                    {
+                        // Still no reachable target, keep the main target and continue later.
+                        u.targetIndex = u.mainTargetIndex;
+                    }
+                }
+                else
+                {
+                    // Main target destroyed: repick.
+                    u.targetIndex = -1;
+                    u.mainTargetIndex = -1;
+                }
+            }
         }
         return;
     }
 
-    // 2) move with A*
+    // 2) Move with A*.
     u.repathCD -= dt;
     if (u.repathCD <= 0.0f)
     {
-        recomputePath(u, tgt, blockedHard);
-
-        // -------- Break-wall behavior (melee units only, non-bomber) --------
-        // If the "ideal" shortest path (treating walls as passable) crosses a wall,
-        // we first attack that wall.
-        if (_gridReady && !isBomber(*u.unit) && isMelee(*u.unit) && tgt.id != 10)
+        if (!u.breakingWall)
         {
-            Pathfinding::GridPos start = worldToGrid(u.sprite->getPosition());
-            Pathfinding::GridPos goalSoft = pickBestApproachCell(*u.unit, tgt, blockedSoft);
-            auto pathSoft = Pathfinding::findPathAStar(_rows, _cols, start, goalSoft, blockedSoft, false, 20000);
-
-            const int hardLen = (int)u.path.size();
-            const int softLen = (int)pathSoft.size();
-
-            // Decide whether wall likely blocks the optimal route
-            bool shouldBreak = false;
-            if (!pathSoft.empty())
+            // Always prefer a reachable priority target once any path exists.
+            std::vector<Pathfinding::GridPos> bestPath;
+            int reachable = pickReachableTargetIndex(*u.unit, unitCell, enemyBuildings, blockedHard, &bestPath);
+            if (reachable >= 0)
             {
-                if (u.path.empty()) shouldBreak = true;
-                else if (hardLen > softLen + 4) shouldBreak = true;
+                u.mainTargetIndex = reachable;
+                u.targetIndex = reachable;
+                u.breakingWall = false;
+                u.path = std::move(bestPath);
+                u.pathCursor = 0;
+                if (!u.path.empty() && u.path[0].r == unitCell.r && u.path[0].c == unitCell.c)
+                    u.pathCursor = 1;
+                u.repathCD = 0.35f;
             }
-
-            if (shouldBreak)
+            else
             {
-                int wallIdx = -1;
-                for (const auto& cell : pathSoft)
+                // No reachable building -> keep the priority target and break walls if needed.
+                if (!isValidIndex(u.mainTargetIndex))
+                    u.mainTargetIndex = pickTargetIndex(*u.unit, unitCell, enemyBuildings, blockedHard);
+                if (!isValidIndex(u.mainTargetIndex))
                 {
-                    wallIdx = findWallIndexAtCell(cell.r, cell.c, enemyBuildings);
-                    if (wallIdx >= 0) break;
+                    u.targetIndex = -1;
+                    return;
                 }
 
-                if (wallIdx >= 0)
+                u.targetIndex = u.mainTargetIndex;
+                recomputePath(u, enemyBuildings[u.mainTargetIndex], blockedHard);
+
+                if (u.path.empty() && (isBarbarian(*u.unit) || isGiant(*u.unit)))
                 {
-                    u.targetIndex = wallIdx;
-                    auto& wall = enemyBuildings[wallIdx];
-                    recomputePath(u, wall, blockedHard);
+                    Pathfinding::GridPos center = getCenterCell(enemyBuildings[u.mainTargetIndex]);
+                    int wallIdx = pickWallToBreak(*u.unit, unitCell, center, enemyBuildings, blockedHard);
+                    if (wallIdx >= 0)
+                    {
+                        u.breakingWall = true;
+                        u.targetIndex = wallIdx;
+                        u.path.clear();
+                        u.pathCursor = 0;
+                        u.repathCD = 0.0f;
+                        recomputePath(u, enemyBuildings[wallIdx], blockedHard);
+                    }
                 }
+
+                // If still no path, keep trying later (do not become permanently idle).
+                if (u.path.empty()) u.repathCD = 0.60f;
             }
         }
-
-        // -------- Fallback: if still no path to a non-wall building, target nearest reachable wall --------
-        if (_gridReady && !isBomber(*u.unit) && u.path.empty() && tgt.id != 10)
+        else
         {
-            int bestWall = -1;
-            int bestLen = 1e9;
-            Pathfinding::GridPos start = worldToGrid(u.sprite->getPosition());
-
-            for (int i = 0; i < (int)enemyBuildings.size(); ++i)
-            {
-                auto& w = enemyBuildings[i];
-                if (!w.building || w.building->hp <= 0 || !w.sprite) continue;
-                if (w.id != 10) continue;
-
-                // compute approach to this wall
-                auto goal = pickBestApproachCell(*u.unit, w, blockedHard);
-                auto p = Pathfinding::findPathAStar(_rows, _cols, start, goal, blockedHard, false, 12000);
-                if (!p.empty() && (int)p.size() < bestLen)
-                {
-                    bestLen = (int)p.size();
-                    bestWall = i;
-                    u.path = std::move(p);
-                    u.pathCursor = 0;
-                    if (!u.path.empty() && u.path[0].r == start.r && u.path[0].c == start.c)
-                        u.pathCursor = 1;
-                }
-            }
-
-            if (bestWall >= 0) u.targetIndex = bestWall;
+            // While breaking a wall, keep walking to it.
+            recomputePath(u, tgt, blockedHard);
+            if (u.path.empty()) u.repathCD = 0.60f;
         }
     }
 
-    stepAlongPath(u, tgt, dt);
+    stepAlongPath(u, dt);
 }
 
 void AISystem::updateDefenses(float dt,
@@ -488,9 +967,6 @@ void AISystem::updateDefenses(float dt,
     for (auto& e : enemyBuildings)
     {
         if (!e.building || e.building->hp <= 0 || !e.sprite) continue;
-
-        // keep hp bar updated
-        CombatSystem::ensureHpBar(e.sprite, e.building->hp, e.building->hpMax, false);
 
         // only defenses attack
         if (!(e.id == 1 || e.id == 2)) continue;
@@ -518,7 +994,6 @@ void AISystem::cleanup(float dt,
 
                 if (u.sprite)
                 {
-                    // placeholder death anim: fade + shrink
                     u.sprite->stopAllActions();
                     u.sprite->runAction(Spawn::create(
                         FadeOut::create(0.30f),

@@ -3,6 +3,8 @@
 #include "Managers/ConfigManager.h"
 #include "Managers/ResourceManager.h"
 #include "cocos2d.h"
+#include <algorithm>
+#include <cmath>
 
 class ElixirCollector : public Building {
 public:
@@ -21,18 +23,34 @@ public:
         stored = std::min((float)capacity, stored + add);
     }
     bool canCollect() const {
-        float thresholdUnits = std::max(0.0f, (float)chunkMinutes);
-        return stored >= thresholdUnits && ResourceManager::getElixir() < ResourceManager::getElixirCap();
+        // Only show/allow collect when we can deliver at least 1% of current total capacity.
+        // This prevents the "Collect" prompt from appearing too frequently.
+        const int cap = ResourceManager::getElixirCap();
+        const int cur = ResourceManager::getElixir();
+        const int deliverMax = std::max(0, cap - cur);
+        const int deliverable = std::min(deliverMax, (int)std::floor(stored));
+
+        // 1% threshold (ceil) so small caps still have a meaningful threshold.
+        const int threshold = std::max(1, (int)std::ceil((float)cap * 0.01f));
+        return deliverable >= threshold;
     }
-    int collect() {
-        int deliverMax = ResourceManager::getElixirCap() - ResourceManager::getElixir();
+
+    int collect(bool ignoreThreshold = false) {
+        const int cap = ResourceManager::getElixirCap();
+        const int cur = ResourceManager::getElixir();
+        const int deliverMax = std::max(0, cap - cur);
         int deliver = std::min(deliverMax, (int)std::floor(stored));
+        const int threshold = std::max(1, (int)std::ceil((float)cap * 0.01f));
+
+        // Enforce the 1% threshold.
+        if (!ignoreThreshold && deliver < threshold) return 0;
         if (deliver > 0) {
             ResourceManager::addElixir(deliver);
             stored -= deliver;
         }
         return deliver;
     }
+
     void manageCollectPrompt(cocos2d::Node* parent, cocos2d::Sprite* sprite) {
         bool show = canCollect();
         if (show) {
@@ -90,19 +108,33 @@ public:
         float add = ratePerHour * (timeScale * dt / 3600.0f);
         stored = std::min((float)capacity, stored + add);
     }
-    bool canCollect() const {
-        float thresholdUnits = std::max(0.0f, (float)chunkMinutes);
-        return stored >= thresholdUnits && ResourceManager::getGold() < ResourceManager::getGoldCap();
+        bool canCollect() const {
+        // Only show/allow collect when we can deliver at least 1% of current total capacity.
+        // This prevents the "Collect" prompt from appearing too frequently.
+        const int cap = ResourceManager::getGoldCap();
+        const int cur = ResourceManager::getGold();
+        const int deliverMax = std::max(0, cap - cur);
+        const int deliverable = std::min(deliverMax, (int)std::floor(stored));
+
+        // 1% threshold (ceil) so small caps still have a meaningful threshold.
+        const int threshold = std::max(1, (int)std::ceil((float)cap * 0.01f));
+        return deliverable >= threshold;
     }
-    int collect() {
-        int deliverMax = ResourceManager::getGoldCap() - ResourceManager::getGold();
+        int collect(bool ignoreThreshold = false) {
+        const int cap = ResourceManager::getGoldCap();
+        const int cur = ResourceManager::getGold();
+        const int deliverMax = std::max(0, cap - cur);
         int deliver = std::min(deliverMax, (int)std::floor(stored));
+        const int threshold = std::max(1, (int)std::ceil((float)cap * 0.01f));
+
+        // Enforce the 1% threshold.
+        if (!ignoreThreshold && deliver < threshold) return 0;
         if (deliver > 0) {
             ResourceManager::addGold(deliver);
             stored -= deliver;
         }
-        return deliver;
-    }
+	        return deliver;
+	    }
     void manageCollectPrompt(cocos2d::Node* parent, cocos2d::Sprite* sprite) {
         bool show = canCollect();
         if (show) {

@@ -11,6 +11,7 @@ USING_NS_CC;
 int SaveSystem::s_currentSlot = 0;
 int SaveSystem::s_battleTargetSlot = -1;
 std::unordered_map<int, int> SaveSystem::s_battleReadyTroops;
+std::unordered_map<int, int> SaveSystem::s_battleTroopLevels;
 
 void SaveSystem::setCurrentSlot(int slot)
 {
@@ -132,29 +133,83 @@ bool SaveSystem::load(int slot, SaveData& outData)
             if (v["c"].IsInt()) b.c = v["c"].GetInt();
             if (v.HasMember("hp") && v["hp"].IsInt()) b.hp = v["hp"].GetInt();
             if (v.HasMember("stored") && v["stored"].IsNumber()) b.stored = v["stored"].GetFloat();
+
+            // Build/upgrade fields (backward compatible: missing fields -> default values).
+            if (v.HasMember("buildState") && v["buildState"].IsInt()) b.buildState = v["buildState"].GetInt();
+            if (v.HasMember("buildTotalSec") && v["buildTotalSec"].IsNumber()) b.buildTotalSec = v["buildTotalSec"].GetFloat();
+            if (v.HasMember("buildRemainSec") && v["buildRemainSec"].IsNumber()) b.buildRemainSec = v["buildRemainSec"].GetFloat();
+            if (v.HasMember("upgradeTargetLevel") && v["upgradeTargetLevel"].IsInt()) b.upgradeTargetLevel = v["upgradeTargetLevel"].GetInt();
             outData.buildings.push_back(b);
         }
     }
 
-
-    // Trained troops (stand units in village)
-    if (doc.HasMember("trainedTroops") && doc["trainedTroops"].IsArray())
+    
+// Trained troops (stand units in village)
+if (doc.HasMember("trainedTroops") && doc["trainedTroops"].IsArray())
+{
+    const auto& arr = doc["trainedTroops"];
+    for (rapidjson::SizeType i = 0; i < arr.Size(); ++i)
     {
-        const auto& arr = doc["trainedTroops"];
+        const auto& it = arr[i];
+        if (!it.IsObject()) continue;
+
+        SaveTrainedTroop t;
+        if (it.HasMember("type") && it["type"].IsInt()) t.type = it["type"].GetInt();
+        if (it.HasMember("r") && it["r"].IsInt()) t.r = it["r"].GetInt();
+        if (it.HasMember("c") && it["c"].IsInt()) t.c = it["c"].GetInt();
+        if (t.type > 0) outData.trainedTroops.push_back(t);
+    }
+}
+
+
+    // Troop levels (backward compatible).
+    outData.troopLevels.clear();
+    // Default: all troops are level 1.
+    for (int id = 1; id <= 4; ++id) outData.troopLevels[id] = 1;
+
+    if (doc.HasMember("troopLevels") && doc["troopLevels"].IsArray())
+    {
+        const auto& arr = doc["troopLevels"];
         for (rapidjson::SizeType i = 0; i < arr.Size(); ++i)
         {
             const auto& it = arr[i];
             if (!it.IsObject()) continue;
-
-            SaveTrainedTroop t;
-            if (it.HasMember("type") && it["type"].IsInt()) t.type = it["type"].GetInt();
-            if (it.HasMember("r") && it["r"].IsInt()) t.r = it["r"].GetInt();
-            if (it.HasMember("c") && it["c"].IsInt()) t.c = it["c"].GetInt();
-            if (t.type > 0) outData.trainedTroops.push_back(t);
+            if (!it.HasMember("id") || !it.HasMember("level")) continue;
+            if (!it["id"].IsInt() || !it["level"].IsInt()) continue;
+            int tid = it["id"].GetInt();
+            int tlv = it["level"].GetInt();
+            if (tid >= 1 && tid <= 4) outData.troopLevels[tid] = std::max(1, tlv);
         }
     }
 
-    return true;
+    // Research state (backward compatible).
+    outData.researchUnitId = 0;
+    outData.researchTargetLevel = 0;
+    outData.researchTotalSec = 0.0f;
+    outData.researchRemainSec = 0.0f;
+    if (doc.HasMember("research") && doc["research"].IsObject())
+    {
+        const auto& r = doc["research"];
+        if (r.HasMember("unitId") && r["unitId"].IsInt()) outData.researchUnitId = r["unitId"].GetInt();
+        if (r.HasMember("targetLevel") && r["targetLevel"].IsInt()) outData.researchTargetLevel = r["targetLevel"].GetInt();
+        if (r.HasMember("totalSec") && r["totalSec"].IsNumber()) outData.researchTotalSec = r["totalSec"].GetFloat();
+        if (r.HasMember("remainSec") && r["remainSec"].IsNumber()) outData.researchRemainSec = r["remainSec"].GetFloat();
+
+        // Clamp invalid values.
+        if (outData.researchRemainSec < 0.0f) outData.researchRemainSec = 0.0f;
+        if (outData.researchTotalSec < 0.0f) outData.researchTotalSec = 0.0f;
+        if (outData.researchRemainSec > outData.researchTotalSec && outData.researchTotalSec > 0.0f)
+            outData.researchRemainSec = outData.researchTotalSec;
+        if (outData.researchUnitId < 1 || outData.researchUnitId > 4)
+        {
+            outData.researchUnitId = 0;
+            outData.researchTargetLevel = 0;
+            outData.researchTotalSec = 0.0f;
+            outData.researchRemainSec = 0.0f;
+        }
+    }
+
+return true;
 }
 
 bool SaveSystem::save(const SaveData& data)
@@ -190,21 +245,51 @@ bool SaveSystem::save(const SaveData& data)
         obj.AddMember("c", b.c, alloc);
         obj.AddMember("hp", b.hp, alloc);
         obj.AddMember("stored", b.stored, alloc);
+
+        obj.AddMember("buildState", b.buildState, alloc);
+        obj.AddMember("buildTotalSec", b.buildTotalSec, alloc);
+        obj.AddMember("buildRemainSec", b.buildRemainSec, alloc);
+        obj.AddMember("upgradeTargetLevel", b.upgradeTargetLevel, alloc);
         arr.PushBack(obj, alloc);
     }
     doc.AddMember("buildings", arr, alloc);
 
-    // Trained troops (stand units in village)
-    rapidjson::Value tArr(rapidjson::kArrayType);
-    for (const auto& t : data.trainedTroops)
+// Trained troops (stand units in village)
+rapidjson::Value tArr(rapidjson::kArrayType);
+for (const auto& t : data.trainedTroops)
+{
+    rapidjson::Value o(rapidjson::kObjectType);
+    o.AddMember("type", t.type, alloc);
+    o.AddMember("r", t.r, alloc);
+    o.AddMember("c", t.c, alloc);
+    tArr.PushBack(o, alloc);
+}
+doc.AddMember("trainedTroops", tArr, alloc);
+
+
+    // Troop levels
+    rapidjson::Value lvArr(rapidjson::kArrayType);
+    // Ensure default values exist (backward compatible callers).
+    std::unordered_map<int,int> levels = data.troopLevels;
+    for (int id = 1; id <= 4; ++id) {
+        if (levels.find(id) == levels.end()) levels[id] = 1;
+    }
+    for (int id = 1; id <= 4; ++id)
     {
         rapidjson::Value o(rapidjson::kObjectType);
-        o.AddMember("type", t.type, alloc);
-        o.AddMember("r", t.r, alloc);
-        o.AddMember("c", t.c, alloc);
-        tArr.PushBack(o, alloc);
+        o.AddMember("id", id, alloc);
+        o.AddMember("level", levels[id], alloc);
+        lvArr.PushBack(o, alloc);
     }
-    doc.AddMember("trainedTroops", tArr, alloc);
+    doc.AddMember("troopLevels", lvArr, alloc);
+
+    // Research state
+    rapidjson::Value rObj(rapidjson::kObjectType);
+    rObj.AddMember("unitId", data.researchUnitId, alloc);
+    rObj.AddMember("targetLevel", data.researchTargetLevel, alloc);
+    rObj.AddMember("totalSec", data.researchTotalSec, alloc);
+    rObj.AddMember("remainSec", data.researchRemainSec, alloc);
+    doc.AddMember("research", rObj, alloc);
 
 
     rapidjson::StringBuffer buffer;
@@ -238,7 +323,15 @@ SaveData SaveSystem::makeDefault(int slot, const std::string& name)
     th.hp = 100;
     th.stored = 0.0f;
     data.buildings.push_back(th);
-    return data;
+    
+    // Default troop levels
+    for (int id = 1; id <= 4; ++id) data.troopLevels[id] = 1;
+    // No active research
+    data.researchUnitId = 0;
+    data.researchTargetLevel = 0;
+    data.researchTotalSec = 0.0f;
+    data.researchRemainSec = 0.0f;
+return data;
 }
 
 void SaveSystem::setBattleReadyTroops(const std::unordered_map<int, int>& troops)
@@ -250,3 +343,14 @@ const std::unordered_map<int, int>& SaveSystem::getBattleReadyTroops()
 {
     return s_battleReadyTroops;
 }
+
+void SaveSystem::setBattleTroopLevels(const std::unordered_map<int, int>& levels)
+{
+    s_battleTroopLevels = levels;
+}
+
+const std::unordered_map<int, int>& SaveSystem::getBattleTroopLevels()
+{
+    return s_battleTroopLevels;
+}
+

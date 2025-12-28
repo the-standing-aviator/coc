@@ -3,5 +3,7 @@
 #include <functional>
 class CustomButton {
 public:
-    static cocos2d::LayerColor* createUpgradePanel(const std::string& title, const std::string& resName, int amount, bool disabled, bool isMaxLevel, const std::function<void()>& onUpgrade, const std::function<void()>& onCancel);
+    // onUpgrade returns true if the upgrade is successfully started/applied.
+    // The panel will only auto-close when onUpgrade returns true.
+    static cocos2d::LayerColor* createUpgradePanel(const std::string& title, const std::string& resName, int amount, bool disabled, bool isMaxLevel, const std::function<bool()>& onUpgrade, const std::function<void()>& onCancel);
 };
