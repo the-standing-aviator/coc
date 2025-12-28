@@ -113,10 +113,11 @@ bool SaveSystem::load(int slot, SaveData& outData)
         if (res.HasMember("population") && res["population"].IsInt()) outData.population = res["population"].GetInt();
     }
 
-    if (doc.HasMember("timeScale") && doc["timeScale"].IsNumber())
-    {
-        outData.timeScale = doc["timeScale"].GetFloat();
-    }
+    // IMPORTANT:
+    // Time-scale is a *temporary cheat* only.
+    // Requirement: initial state must be NO acceleration; only enable after clicking the cheat button.
+    // Therefore we intentionally DO NOT load persisted timeScale from the save file.
+    outData.timeScale = 1.0f;
 
     if (doc.HasMember("buildings") && doc["buildings"].IsArray())
     {
@@ -233,7 +234,8 @@ bool SaveSystem::save(const SaveData& data)
     res.AddMember("population", data.population, alloc);
     doc.AddMember("resources", res, alloc);
 
-    doc.AddMember("timeScale", data.timeScale, alloc);
+    // Time-scale cheat is not persisted. Always save default 1.0 to overwrite any old saves.
+    doc.AddMember("timeScale", 1.0, alloc);
 
     rapidjson::Value arr(rapidjson::kArrayType);
     for (const auto& b : data.buildings)

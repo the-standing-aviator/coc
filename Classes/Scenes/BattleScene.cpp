@@ -829,10 +829,10 @@ void BattleScene::checkBattleResult(bool timeUp)
     if (_battleEnded) return;
 
     // End conditions (as required):
-    // 1) TownHall destroyed -> enter result check immediately.
-    // 2) Time up.
-    // 3) All buildings destroyed (excluding walls).
-    // 4) All troops deployed and all are dead.
+    // 1) Time up.
+    // 2) All buildings destroyed (excluding walls).
+    // 3) All troops deployed and all are dead.
+    // NOTE: Destroying the TownHall does NOT end the battle immediately.
     bool townHallDestroyed = isTownHallDestroyed();
     bool allNonWallDestroyed = areAllNonWallBuildingsDestroyed();
     bool allTroopsGone = areAllTroopsDeployedAndDead();
@@ -842,7 +842,7 @@ void BattleScene::checkBattleResult(bool timeUp)
         allTroopsGone = false;
     }
 
-    bool shouldEnd = townHallDestroyed || timeUp || allNonWallDestroyed || allTroopsGone;
+    bool shouldEnd = timeUp || allNonWallDestroyed || allTroopsGone;
     if (!shouldEnd) return;
 
     // Result logic: TownHall destroyed -> victory, otherwise defeated.

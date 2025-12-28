@@ -1794,7 +1794,9 @@ void MainScene::loadFromCurrentSaveOrCreate()
 	        _saveDirty = true; // ensure lastRealTime is saved back
     }
 
-    _timeScale = data.timeScale > 0.0f ? data.timeScale : 1.0f;
+    // Time-scale is a temporary cheat.
+    // Requirement: initial state must be NO acceleration until the cheat button is used.
+    _timeScale = 1.0f;
 
     for (const auto& b : data.buildings)
     {
@@ -1858,7 +1860,8 @@ void MainScene::saveToCurrentSlot(bool force)
     data.gold = ResourceManager::getGold();
     data.elixir = ResourceManager::getElixir();
     data.population = ResourceManager::getPopulation();
-    data.timeScale = _timeScale;
+    // Do not persist the time-scale cheat.
+    data.timeScale = 1.0f;
     data.lastRealTime = static_cast<int64_t>(std::time(nullptr));
 
     // Persist troop levels and research state

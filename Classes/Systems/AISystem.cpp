@@ -1102,6 +1102,18 @@ void AISystem::cleanup(float dt,
                     e.sprite->setTexture(tex);
                     cocos2d::Size ts = tex->getContentSize();
                     e.sprite->setTextureRect(cocos2d::Rect(0, 0, ts.width, ts.height));
+
+                    // Requirement: ruin sprite must be a fixed 3x3 tiles size (not too large).
+                    // We scale the ruin texture to fit INSIDE the projected 3x3 footprint.
+                    // Slightly smaller than the full 3x3 footprint to avoid looking oversized.
+                    float desiredW = std::max(1.0f, _tileW * 3.0f * 0.95f);
+                    float desiredH = std::max(1.0f, _tileH * 3.0f * 0.95f);
+                    float denomW = std::max(1.0f, ts.width);
+                    float denomH = std::max(1.0f, ts.height);
+                    float s = std::min(desiredW / denomW, desiredH / denomH);
+                    // Guard: avoid crazy scales when grid metrics are not ready.
+                    if (_tileW <= 0.01f || _tileH <= 0.01f) s = 1.0f;
+                    e.sprite->setScale(s);
                 }
                 // Mark as "handled" so the wall-only death animation below won't run.
                 e.dying = true;
